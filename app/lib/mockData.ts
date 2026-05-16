@@ -1,0 +1,230 @@
+// Mock data for demonstration
+export const mockArticles = [
+  {
+    id: 1,
+    title: 'काठमाडौंमा नयाँ मेट्रो रेल सेवा आजदेखि सुरु',
+    summary: 'काठमाडौं उपत्यकामा लामो समयदेखि प्रतीक्षित मेट्रो रेल सेवा आजदेखि औपचारिक रूपमा सञ्चालनमा आएको छ। यो सेवाले यातायात समस्या समाधान गर्ने अपेक्षा गरिएको छ।',
+    category: 'राजनीति',
+    source: 'BBC',
+    imageUrl: 'https://images.unsplash.com/photo-1544620347-c4fd4a3d5957?w=800',
+    publishedAt: '२ घण्टा अघि',
+    views: 15420,
+    comments: 45,
+    likes: 230,
+    featured: true,
+  },
+  {
+    id: 2,
+    title: 'नेपाल र भारतबीच नयाँ व्यापार सम्झौता सम्पन्न',
+    summary: 'नेपाल र भारत सरकारबीच द्विपक्षीय व्यापार बढाउने उद्देश्यले नयाँ सम्झौतामा हस्ताक्षर भएको छ।',
+    category: 'अर्थतन्त्र',
+    source: 'Reuters',
+    imageUrl: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=800',
+    publishedAt: '३ घण्टा अघि',
+    views: 12350,
+    comments: 32,
+    likes: 180,
+  },
+  {
+    id: 3,
+    title: 'नेपाली राष्ट्रिय फुटबल टिम SAFF च्याम्पियनशिप फाइनलमा',
+    summary: 'SAFF च्याम्पियनशिपमा नेपाली टिमले उत्कृष्ट प्रदर्शन गर्दै फाइनलमा स्थान बनाएको छ।',
+    category: 'खेलकुद',
+    source: 'ESPN',
+    imageUrl: 'https://images.unsplash.com/photo-1579952363873-27f3bade9f55?w=800',
+    publishedAt: '४ घण्टा अघि',
+    views: 18900,
+    comments: 89,
+    likes: 450,
+  },
+  {
+    id: 4,
+    title: 'सगरमाथामा नयाँ कीर्तिमान - सबैभन्दा धेरै आरोहण',
+    summary: 'यस वर्षको वसन्त ऋतुमा सगरमाथामा सबैभन्दा धेरै आरोहण हुने नयाँ कीर्तिमान स्थापित भएको छ।',
+    category: 'विश्व',
+    source: 'National Geographic',
+    imageUrl: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800',
+    publishedAt: '५ घण्टा अघि',
+    views: 14200,
+    comments: 56,
+    likes: 310,
+  },
+  {
+    id: 5,
+    title: 'नेपालमा नयाँ पर्यटन नीति घोषणा',
+    summary: 'सरकारले पर्यटन क्षेत्रलाई थप प्रवर्द्धन गर्न नयाँ नीति ल्याएको छ।',
+    category: 'अर्थतन्त्र',
+    source: 'The Himalayan Times',
+    imageUrl: 'https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=800',
+    publishedAt: '६ घण्टा अघि',
+    views: 9800,
+    comments: 23,
+    likes: 145,
+  },
+  {
+    id: 6,
+    title: 'काठमाडौंको वायु प्रदूषणमा सुधार',
+    summary: 'हालैका उपायहरूले काठमाडौं उपत्यकाको वायु गुणस्तरमा सुधार आएको देखिएको छ।',
+    category: 'स्वास्थ्य',
+    source: 'WHO',
+    imageUrl: 'https://images.unsplash.com/photo-1475776408506-9a5371e7a068?w=800',
+    publishedAt: '८ घण्टा अघि',
+    views: 11200,
+    comments: 34,
+    likes: 220,
+  },
+  {
+    id: 7,
+    title: 'नेपालमा ५जी सेवा सञ्चालनमा आउँदै',
+    summary: 'दूरसञ्चार कम्पनीहरूले आगामी महिनादेखि ५जी सेवा सुरु गर्ने तयारी पूरा गरेका छन्।',
+    category: 'प्रविधि',
+    source: 'TechCrunch',
+    imageUrl: 'https://images.unsplash.com/photo-1558346490-a72e53ae2d4f?w=800',
+    publishedAt: '१० घण्टा अघि',
+    views: 16500,
+    comments: 67,
+    likes: 380,
+  },
+  {
+    id: 8,
+    title: 'बलिउड तारा नेपाल भ्रमणमा',
+    summary: 'भारतीय चलचित्र उद्योगका चर्चित कलाकार नेपाल भ्रमणमा आएका छन्।',
+    category: 'मनोरञ्जन',
+    source: 'Bollywood Hungama',
+    imageUrl: 'https://images.unsplash.com/photo-1574267432644-f61b3b94d3c7?w=800',
+    publishedAt: '१२ घण्टा अघि',
+    views: 21000,
+    comments: 102,
+    likes: 560,
+  },
+]
+
+export const getCategoryArticles = (category: string) => {
+  return mockArticles.filter((article) => 
+    article.category.includes(category)
+  ).slice(0, 4)
+}
+
+export const getPoliticsArticles = () => [
+  {
+    id: 101,
+    title: 'संसदमा महत्वपूर्ण विधेयक पारित',
+    summary: 'प्रतिनिधि सभाको बैठकमा महत्वपूर्ण विधेयक बहुमतले पारित भएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1529107386315-e1a2ed48a620?w=800',
+    publishedAt: '१ घण्टा अघि',
+  },
+  {
+    id: 102,
+    title: 'प्रधानमन्त्रीको विदेश भ्रमण सफल',
+    summary: 'प्रधानमन्त्रीको हालको विदेश भ्रमण सफल भएको सरकारले जनाएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1541872703-74c5e44368f9?w=800',
+    publishedAt: '३ घण्टा अघि',
+  },
+  {
+    id: 103,
+    title: 'नयाँ मन्त्रिमण्डल विस्तार',
+    summary: 'सरकारले मन्त्रिमण्डल विस्तार गर्ने निर्णय गरेको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800',
+    publishedAt: '५ घण्टा अघि',
+  },
+  {
+    id: 104,
+    title: 'स्थानीय तह निर्वाचनको मिति घोषणा',
+    summary: 'निर्वाचन आयोगले स्थानीय तह निर्वाचनको मिति घोषणा गरेको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1591035897819-f4bdf739f446?w=800',
+    publishedAt: '७ घण्टा अघि',
+  },
+]
+
+export const getEconomyArticles = () => [
+  {
+    id: 201,
+    title: 'शेयर बजारमा नयाँ रेकर्ड',
+    summary: 'नेप्से परिसूचकले नयाँ उचाइ छोएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=800',
+    publishedAt: '२ घण्टा अघि',
+  },
+  {
+    id: 202,
+    title: 'बैंक ब्याजदरमा कमी',
+    summary: 'नेपाल राष्ट्र बैंकले बैंकहरूको ब्याजदर घटाउन निर्देशन दिएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=800',
+    publishedAt: '४ घण्टा अघि',
+  },
+  {
+    id: 203,
+    title: 'विप्रेषण आय बढ्दो',
+    summary: 'विदेशबाट आउने विप्रेषणमा उल्लेख्य वृद्धि भएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=800',
+    publishedAt: '६ घण्टा अघि',
+  },
+  {
+    id: 204,
+    title: 'नयाँ बजेट नीति घोषणा',
+    summary: 'अर्थ मन्त्रालयले आर्थिक वर्षको नयाँ बजेट नीति घोषणा गरेको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=800',
+    publishedAt: '९ घण्टा अघि',
+  },
+]
+
+export const getSportsArticles = () => [
+  {
+    id: 301,
+    title: 'नेपाली क्रिकेट टिमको ऐतिहासिक जित',
+    summary: 'नेपाली राष्ट्रिय क्रिकेट टिमले शृंखला जितेको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1531415074968-036ba1b575da?w=800',
+    publishedAt: '१ घण्टा अघि',
+  },
+  {
+    id: 302,
+    title: 'ओलम्पिकका लागि नेपाली खेलाडी छनोट',
+    summary: 'आगामी ओलम्पिकका लागि नेपालका खेलाडीहरू छनोट भएका छन्।',
+    imageUrl: 'https://images.unsplash.com/photo-1461896836934-ffe607ba8211?w=800',
+    publishedAt: '३ घण्टा अघि',
+  },
+  {
+    id: 303,
+    title: 'राष्ट्रिय खेलकुद प्रतियोगिता सुरु',
+    summary: 'नवौं राष्ट्रिय खेलकुद प्रतियोगिता भव्य रूपमा सुरु भएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1517649763962-0c623066013b?w=800',
+    publishedAt: '५ घण्टा अघि',
+  },
+  {
+    id: 304,
+    title: 'नेपाली पर्वतारोहीको नयाँ कीर्तिमान',
+    summary: 'नेपाली पर्वतारोहीले विश्व कीर्तिमान बनाएका छन्।',
+    imageUrl: 'https://images.unsplash.com/photo-1522163182402-834f871fd851?w=800',
+    publishedAt: '८ घण्टा अघि',
+  },
+]
+
+export const getTechArticles = () => [
+  {
+    id: 401,
+    title: 'नेपालमा AI स्टार्टअप बूम',
+    summary: 'नेपालमा कृत्रिम बुद्धिमत्तामा आधारित स्टार्टअपहरू तीव्र गतिमा बढिरहेका छन्।',
+    imageUrl: 'https://images.unsplash.com/photo-1677442136019-21780ecad995?w=800',
+    publishedAt: '२ घण्टा अघि',
+  },
+  {
+    id: 402,
+    title: 'इन्टरनेट गति दोब्बर',
+    summary: 'नेपालमा इन्टरनेट गतिमा उल्लेख्य सुधार आएको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=800',
+    publishedAt: '४ घण्टा अघि',
+  },
+  {
+    id: 403,
+    title: 'नेपाली अ्यापले अन्तर्राष्ट्रिय पुरस्कार जित्यो',
+    summary: 'नेपाली डेभलपरहरूले बनाएको अ्यापले अन्तर्राष्ट्रिय पुरस्कार जितेको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1512941937669-90a1b58e7e9c?w=800',
+    publishedAt: '७ घण्टा अघि',
+  },
+  {
+    id: 404,
+    title: 'साइबर सुरक्षा कानून कडाई',
+    summary: 'सरकारले साइबर सुरक्षा कानूनलाई थप कडाई गर्ने निर्णय गरेको छ।',
+    imageUrl: 'https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800',
+    publishedAt: '११ घण्टा अघि',
+  },
+]
