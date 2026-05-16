@@ -13,22 +13,31 @@ export async function GET(request: Request) {
   }
 
   try {
-    console.log('⏰ Cron job triggered - Fetching news...')
+    console.log('⏰ Cron job triggered')
     
-    // Call our fetch-news API
     const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'
-    const response = await fetch(`${baseUrl}/api/fetch-news`, {
+    
+    // Step 1: Fetch news
+    console.log('📰 Step 1: Fetching news...')
+    const fetchResponse = await fetch(`${baseUrl}/api/fetch-news`, {
       method: 'POST',
     })
+    const fetchData = await fetchResponse.json()
+    console.log('✅ Fetch completed:', fetchData.summary)
 
-    const data = await response.json()
-
-    console.log('✅ Cron fetch completed:', data)
+    // Step 2: Translate articles
+    console.log('\n🌐 Step 2: Translating articles...')
+    const translateResponse = await fetch(`${baseUrl}/api/translate`, {
+      method: 'POST',
+    })
+    const translateData = await translateResponse.json()
+    console.log('✅ Translation completed:', translateData.summary)
 
     return NextResponse.json({
       success: true,
-      message: 'News fetch triggered successfully',
-      data,
+      message: 'Automated news pipeline completed',
+      fetch: fetchData.summary,
+      translate: translateData.summary,
       timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
