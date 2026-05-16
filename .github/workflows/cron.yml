@@ -1,0 +1,15 @@
+name: Automated News Fetch
+
+on:
+  schedule:
+    # Run every 30 minutes
+    - cron: '*/30 * * * *'
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  fetch-news:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger News Fetch
+        run: |
+          curl -X GET https://nepali-news-portal-wheat.vercel.app/api/cron
