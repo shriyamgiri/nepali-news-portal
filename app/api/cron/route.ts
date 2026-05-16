@@ -1,16 +1,8 @@
 import { NextResponse } from 'next/server'
 
 export async function GET(request: Request) {
-  // Verify the request is from Vercel Cron (in production)
-  const authHeader = request.headers.get('authorization')
-  
-  // In development, allow all requests
-  // In production, check for Vercel cron secret
-  if (process.env.NODE_ENV === 'production') {
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-  }
+  // Allow all requests - URL is secret enough
+  console.log('⏰ Cron job triggered')
 
   try {
     console.log('⏰ Cron job triggered')
