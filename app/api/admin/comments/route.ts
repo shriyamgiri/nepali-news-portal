@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { supabase } from '@/app/lib/supabase'
 
-// GET - Fetch pending comments
+// GET - Fetch all comments (not just pending)
 export async function GET() {
   try {
     const { data, error } = await supabase
@@ -10,7 +10,6 @@ export async function GET() {
         *,
         articles (nepali_title, original_title)
       `)
-      .eq('status', 'pending')
       .order('created_at', { ascending: false })
 
     if (error) throw error
@@ -27,16 +26,41 @@ export async function PATCH(request: Request) {
     const body = await request.json()
     const { id, status } = body
 
-    if (!['approved', 'rejected'].includes(status)) {
+    if (!['approved', 'rejected', 'spam'].includes(status)) {
       return NextResponse.json({ error: 'Invalid status' }, { status: 400 })
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('comments')
       .update({ 
         status,
         approved_at: status === 'approved' ? new Date().toISOString() : null
       })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (error) throw error
+
+    return NextResponse.json({ success: true, comment: data })
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+}
+
+// DELETE - Delete comment
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get('id')
+
+    if (!id) {
+      return NextResponse.json({ error: 'Comment ID required' }, { status: 400 })
+    }
+
+    const { error } = await supabase
+      .from('comments')
+      .delete()
       .eq('id', id)
 
     if (error) throw error
