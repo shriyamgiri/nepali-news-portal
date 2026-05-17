@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic'
+
 'use client'
 import { useState, useEffect } from 'react'
 import { FileText, Eye, Trash2, RefreshCw, Search, ExternalLink } from 'lucide-react'

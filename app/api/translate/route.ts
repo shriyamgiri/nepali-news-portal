@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic'  // ← Add this as first line
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { supabase } from '@/app/lib/supabase'
