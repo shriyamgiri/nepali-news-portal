@@ -6,6 +6,8 @@ import TrendingNews from './components/TrendingNews'
 import CategorySection from './components/CategorySection'
 import { getArticles, getArticlesByCategory } from './lib/database'
 
+export const dynamic = 'force-dynamic'  // ← Add as first line after 'use client' if present
+
 export default async function Home() {
   // Fetch real data from database
   const mainArticles = await getArticles(6)

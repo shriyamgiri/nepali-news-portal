@@ -5,7 +5,10 @@ import NewsCard from '../components/NewsCard'
 import TrendingNews from '../components/TrendingNews'
 import { supabase } from '../lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 const VALID_CATEGORIES = ['politics', 'economy', 'sports', 'tech', 'entertainment', 'world', 'health']
+
 
 const CATEGORY_INFO: Record<string, { nameNe: string; icon: string }> = {
   politics: { nameNe: 'राजनीति', icon: '⚖️' },

@@ -3,6 +3,8 @@ import Footer from '../components/Footer'
 import NewsCard from '../components/NewsCard'
 import { supabase } from '../lib/supabase'
 
+export const dynamic = 'force-dynamic'
+
 export default async function TrendingPage() {
   const { data: articles } = await supabase
     .from('articles')
