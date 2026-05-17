@@ -1,8 +1,9 @@
-export const dynamic = 'force-dynamic'  // ← Add this as first line
+export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { supabase } from '@/app/lib/supabase'
 
+// ── POST /api/admin/login → Sign In ──
 export async function POST(request: Request) {
   try {
     const { email, password } = await request.json()
@@ -14,8 +15,7 @@ export async function POST(request: Request) {
       )
     }
 
-    // ✅ FIX 1: Removed .eq('is_active', true) — was causing login to fail
-    // if column doesn't exist or value is null
+    // Removed .eq('is_active', true) — was silently blocking login
     const { data: admin, error } = await supabase
       .from('admin_users')
       .select('*')
@@ -23,17 +23,18 @@ export async function POST(request: Request) {
       .single()
 
     if (error || !admin) {
-      console.error('Admin lookup error:', error)
+      console.error('Admin lookup failed:', error?.message)
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
       )
     }
 
-    // ✅ FIX 2: Keep existing base64 password check (matches how it was stored)
+    // Base64 password check (matches how password was originally stored)
     const passwordHash = Buffer.from(password).toString('base64')
 
     if (admin.password_hash !== passwordHash) {
+      console.error('Password mismatch for:', email)
       return NextResponse.json(
         { error: 'Invalid email or password' },
         { status: 401 }
@@ -51,7 +52,6 @@ export async function POST(request: Request) {
       `${admin.id}:${admin.email}:${Date.now()}`
     ).toString('base64')
 
-    // ✅ FIX 3: Set session cookie so middleware allows access to /admin
     const response = NextResponse.json({
       success: true,
       token,
@@ -63,11 +63,13 @@ export async function POST(request: Request) {
       },
     })
 
+    // ✅ httpOnly: false — allows layout's document.cookie to read it
+    // Middleware still provides server-side route protection
     response.cookies.set('admin_session', token, {
-      httpOnly: true,
+      httpOnly: false,
       secure:   process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge:   60 * 60 * 24 * 7,  // 7 days
+      maxAge:   60 * 60 * 24 * 7, // 7 days
       path:     '/',
     })
 
@@ -80,4 +82,17 @@ export async function POST(request: Request) {
       { status: 500 }
     )
   }
+}
+
+// ── DELETE /api/admin/login → Sign Out ──
+export async function DELETE() {
+  const response = NextResponse.json({ success: true })
+  response.cookies.set('admin_session', '', {
+    httpOnly: false,
+    secure:   process.env.NODE_ENV === 'production',
+    sameSite: 'lax',
+    maxAge:   0,
+    path:     '/',
+  })
+  return response
 }
