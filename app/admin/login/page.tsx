@@ -43,6 +43,13 @@ export default function AdminLoginPage() {
         return
       }
 
+      // Use cookie instead of localStorage
+      document.cookie = `admin_session=${data.token}; path=/; max-age=86400`
+
+      // Direct redirect
+      alert('Login successful!')
+      window.location.href = '/admin'
+
       // Store the session token in localStorage
       if (data.token) {
         localStorage.setItem('admin_session', data.token)
