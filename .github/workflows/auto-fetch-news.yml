@@ -1,0 +1,30 @@
+name: Auto Fetch & Translate News
+
+on:
+  # Run every 30 minutes
+  schedule:
+    - cron: '*/30 * * * *'
+  
+  # Allow manual trigger from GitHub Actions tab
+  workflow_dispatch:
+
+jobs:
+  fetch-and-translate:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Fetch Latest News
+        run: |
+          echo "🚀 Starting automated news fetch..."
+          echo "⏰ Time: $(date)"
+          
+          curl -X GET https://nepali-news-portal-wheat.vercel.app/api/cron
+          
+          echo ""
+          echo "✅ News fetch completed!"
+          echo "📊 Check your website for new articles"
+
+      - name: Summary
+        run: |
+          echo "✅ Automated pipeline completed successfully"
+          echo "📰 Fresh Nepali news should now be live!"
