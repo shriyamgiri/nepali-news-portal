@@ -97,7 +97,7 @@ export default async function NewsArticle({ params }: { params: Promise<{ id: st
             {/* Article Content */}
             <div className="prose prose-lg max-w-none nepali-text">
               {article.nepali_content ? (
-                article.nepali_content.split('\n\n').map((paragraph, index) => (
+                article.nepali_content.split('\n\n').map((paragraph: string, index: number) => (
                   <p key={index} className="mb-4 text-gray-700 leading-relaxed text-lg">
                     {paragraph}
                   </p>
@@ -107,7 +107,7 @@ export default async function NewsArticle({ params }: { params: Promise<{ id: st
                   {article.nepali_summary}
                 </p>
               ) : article.original_content ? (
-                article.original_content.split('\n\n').map((paragraph, index) => (
+                article.original_content.split('\n\n').map((paragraph: string, index: number) => (
                   <p key={index} className="mb-4 text-gray-700 leading-relaxed text-lg">
                     {paragraph}
                   </p>
