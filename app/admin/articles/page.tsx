@@ -1,6 +1,6 @@
-export const dynamic = 'force-dynamic'
-
 'use client'
+
+export const dynamic = 'force-dynamic'
 import { useState, useEffect } from 'react'
 import { FileText, Eye, Trash2, RefreshCw, Search, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
