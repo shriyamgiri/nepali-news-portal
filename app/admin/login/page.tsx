@@ -38,17 +38,18 @@ export default function AdminLoginPage() {
       const data = await res.json()
 
       if (!res.ok) {
-        setError(data.error || 'Invalid email or password. Please try again.')
-        setLoading(false)
-        return
+  	setError(data.error || 'Invalid email or password. Please try again.')
+  	setLoading(false)
+  	return
       }
 
-      // Use cookie instead of localStorage
-      document.cookie = `admin_session=${data.token}; path=/; max-age=86400`
+	// Use cookie instead of localStorage
+      document.cookie = `admin_session=${data.token}; path=/; max-age=86400; SameSite=Lax`
 
-      // Direct redirect
-      alert('Login successful!')
-      window.location.href = '/admin'
+	// NO ALERT - direct redirect
+      setTimeout(() => {
+       window.location.href = '/admin'
+      }, 100)
 
       // Store the session token in localStorage
       if (data.token) {

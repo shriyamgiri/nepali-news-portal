@@ -28,6 +28,9 @@ const Footer = () => {
   return (
     <footer className="bg-gray-900 text-gray-300 mt-16">
       {/* Main Footer */}
+      <h3 className="text-xl font-bold text-white nepali-text">
+       GN Nepal
+      </h3>
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-8">
           {/* About Section */}
@@ -37,7 +40,7 @@ const Footer = () => {
                 ने
               </div>
               <h3 className="text-xl font-bold text-white nepali-text">
-                नेपाल खबर
+                GN Nepal
               </h3>
             </div>
             <p className="text-sm mb-4 nepali-text">
@@ -157,6 +160,15 @@ const Footer = () => {
                 </Link>
               ))}
             </div>
+          </div>
+        </div>
+        {/* Trust Badges */}
+        <div className="border-t border-gray-800 pt-6 mt-6">
+          <div className="flex flex-wrap justify-center gap-6 text-sm text-gray-400">
+            <span>✅ Trusted</span>
+            <span>⚡ Fast</span>
+            <span>🌍 Global</span>
+            <span>🇳🇵 For Nepali</span>
           </div>
         </div>
       </div>

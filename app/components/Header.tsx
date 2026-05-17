@@ -45,9 +45,9 @@ const Header = () => {
             </div>
             <div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-800 nepali-text">
-                नेपाल खबर
+                GN Nepal
               </h1>
-              <p className="text-xs text-gray-500">Nepal News Portal</p>
+              <p className="text-xs text-gray-500">विश्वभरका समाचार नेपालीमा</p>
             </div>
           </Link>
 

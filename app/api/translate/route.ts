@@ -160,8 +160,9 @@ export async function POST(request: Request) {
   }
 }
 
-// Create the perfect Nepali translation prompt
 function createTranslationPrompt(title: string, summary: string, content: string): string {
+  const sourceText = content || summary
+  
   return `You are a professional Nepali news translator. Translate the following news article to Nepali.
 
 CRITICAL INSTRUCTIONS:
@@ -170,7 +171,8 @@ CRITICAL INSTRUCTIONS:
 3. Maintain factual accuracy - do NOT add or remove information
 4. Use neutral, journalistic tone
 5. Keep numbers in their original form
-6. Translate dates and times appropriately
+6. If the content is short (only summary), expand it to 3-4 detailed paragraphs while staying factual
+7. Translate dates and times appropriately
 
 Examples of proper nouns to KEEP AS-IS:
 - Names: Donald Trump, Joe Biden, Narendra Modi
@@ -178,20 +180,18 @@ Examples of proper nouns to KEEP AS-IS:
 - Organizations: UN, WHO, BBC, NASA
 - Countries: America, India, China
 
-Return ONLY a JSON object with this exact format:
-{
-  "title": "translated title in Nepali",
-  "summary": "translated summary in Nepali (2-3 sentences)",
-  "content": "full translated content in Nepali"
-}
-
 ARTICLE TO TRANSLATE:
 
 Title: ${title}
 
-Summary: ${summary}
+Content: ${sourceText}
 
-Content: ${content.substring(0, 2000)}
+Return ONLY a JSON object with this exact format:
+{
+  "title": "translated title in Nepali",
+  "summary": "translated summary in Nepali (2-3 sentences)",
+  "content": "full detailed content in Nepali (3-5 paragraphs, each separated by \\n\\n)"
+}
 
 Respond with ONLY the JSON object, no other text.`
 }

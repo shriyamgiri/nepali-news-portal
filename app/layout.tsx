@@ -9,9 +9,9 @@ const notoSansDevanagari = Noto_Sans_Devanagari({
 })
 
 export const metadata: Metadata = {
-  title: 'नेपाल खबर - Nepal News Portal',
-  description: 'विश्वभरका समाचार नेपालीमा - Global news in Nepali language',
-  keywords: 'nepal news, nepali khabar, news in nepali, नेपाल समाचार',
+  title: 'GN Nepal - विश्वभरका समाचार नेपालीमा',
+  description: 'Global News in Nepali - Trusted, Fast, For Nepali People',
+  keywords: 'GN Nepal, nepal news, nepali khabar, global news nepali, विश्व समाचार',
 }
 
 export default function RootLayout({
