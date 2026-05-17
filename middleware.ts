@@ -1,31 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-const SESSION_COOKIE = 'admin_session'
-const SESSION_VALUE  = 'khabar_admin_authenticated'
-
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl
 
-  // Only protect /admin routes (but NOT /admin/login itself)
   const isAdminRoute      = pathname.startsWith('/admin')
   const isAdminLoginRoute = pathname === '/admin/login'
 
   if (isAdminRoute && !isAdminLoginRoute) {
-    const session = request.cookies.get(SESSION_COOKIE)?.value
+    const session = request.cookies.get('admin_session')
 
-    // Not logged in → redirect to login
-    if (session !== SESSION_VALUE) {
+    // ✅ No session cookie → redirect to login
+    if (!session?.value) {
       const loginUrl = new URL('/admin/login', request.url)
-      // Pass the original URL so we can redirect back after login
-      loginUrl.searchParams.set('from', pathname)
       return NextResponse.redirect(loginUrl)
     }
   }
 
-  // Already logged in and visiting login page → redirect to dashboard
+  // ✅ Already logged in → skip login page, go straight to dashboard
   if (isAdminLoginRoute) {
-    const session = request.cookies.get(SESSION_COOKIE)?.value
-    if (session === SESSION_VALUE) {
+    const session = request.cookies.get('admin_session')
+    if (session?.value) {
       return NextResponse.redirect(new URL('/admin', request.url))
     }
   }
@@ -34,6 +28,5 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  // Run middleware on all /admin routes
   matcher: ['/admin/:path*'],
 }
