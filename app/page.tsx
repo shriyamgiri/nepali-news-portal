@@ -8,6 +8,8 @@ import { getArticles, getArticlesByCategory } from './lib/database'
 
 export const dynamic = 'force-dynamic'  // ← Add as first line after 'use client' if present
 
+<AdSlot position="infeed-1" className="my-4" />
+
 export default async function Home() {
   // Fetch real data from database
   const mainArticles = await getArticles(6)

@@ -74,6 +74,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/articles', label: 'Articles', icon: FileText },
     { href: '/admin/comments', label: 'Comments', icon: MessageSquare },
     { href: '/admin/fetch', label: 'Fetch & Translate', icon: TrendingUp },
+    { href: '/admin/advertisements', label: 'Advertisements', icon: DollarSign },
   ]
 
   function isActive(href: string) {

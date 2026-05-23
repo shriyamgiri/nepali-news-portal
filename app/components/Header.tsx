@@ -3,6 +3,9 @@
 import Link from 'next/link'
 import { Search, Menu, X, Globe } from 'lucide-react'
 import { useState } from 'react'
+import AdSlot from './AdSlot'
+// Add inside your header, below the nav:
+<AdSlot position="header" className="w-full my-2" />
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
