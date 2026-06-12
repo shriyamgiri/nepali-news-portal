@@ -16,7 +16,7 @@ export default function ContactPage() {
                 <Mail className="w-5 h-5 text-blue-600 mt-1" />
                 <div>
                   <p className="font-medium text-gray-900">Email</p>
-                  <p className="text-gray-600">contact@gn-nepal.com</p>
+                  <p className="text-gray-600">coolsriyam@gmail.com</p>
                 </div>
               </div>
               <div className="flex items-start gap-3">
