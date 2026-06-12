@@ -1,0 +1,1 @@
+echo "google.com, pub-6475643427467810, DIRECT, f08c47fec0942fa0" > public/ads.txt
