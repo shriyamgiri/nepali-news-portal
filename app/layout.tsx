@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { Noto_Sans_Devanagari } from 'next/font/google'
+import Script from 'next/script'
 import './globals.css'
 
 const notoSansDevanagari = Noto_Sans_Devanagari({
@@ -21,6 +22,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="ne">
+      <head>
+        <Script
+          async
+          src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-6475643427467810"
+          crossOrigin="anonymous"
+          strategy="afterInteractive"
+        />
+      </head>
       <body className={notoSansDevanagari.className}>{children}</body>
     </html>
   )
