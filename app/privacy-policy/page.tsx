@@ -134,7 +134,7 @@ export default function PrivacyPolicyPage() {
               यो गोपनीयता नीति सम्बन्धी कुनै प्रश्न भए हामीलाई सम्पर्क गर्नुहोस्:
             </p>
             <div className="mt-3 bg-gray-50 rounded-lg p-4">
-              <p className="text-gray-700">📧 Email: contact@gnnepal.com</p>
+              <p className="text-gray-700">📧 Email: coolsriyam@gmail.com</p>
               <p className="text-gray-700 mt-1">🌐 Website: nepali-news-portal-wheat.vercel.app</p>
             </div>
           </section>
