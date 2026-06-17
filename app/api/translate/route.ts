@@ -2,7 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-import { supabase } from '@/app/lib/supabase'
+import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 // ── Production config ──
 const genAI         = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)

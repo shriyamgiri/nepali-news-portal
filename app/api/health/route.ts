@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { supabase } from '@/app/lib/supabase'
+import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 export async function GET() {
   const startTime = Date.now()

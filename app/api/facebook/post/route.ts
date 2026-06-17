@@ -1,7 +1,7 @@
 export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
-import { supabase } from '@/app/lib/supabase'
+import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 const FB_API        = 'https://graph.facebook.com/v19.0'
 const PAGE_ID       = process.env.FACEBOOK_PAGE_ID!
