@@ -5,7 +5,7 @@ import { Clock, Eye, MessageCircle, ThumbsUp, Share2 } from 'lucide-react'
 import { useState } from 'react'
 
 interface NewsCardProps {
-  id: number
+  id: number | string
   title: string
   summary: string
   category: string
@@ -36,6 +36,7 @@ const NewsCard = ({
 
   const handleLike = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (isLiked) {
       setLikeCount(likeCount - 1)
     } else {
@@ -46,13 +47,22 @@ const NewsCard = ({
 
   const handleShare = (e: React.MouseEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     if (navigator.share) {
       navigator.share({
         title: title,
         text: summary,
         url: `/news/${id}`,
       })
+    } else {
+      navigator.clipboard.writeText(`${window.location.origin}/news/${id}`)
+      alert('लिंक कपी भयो!')
     }
+  }
+
+  const handleCommentClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    window.location.href = `/news/${id}#comments`
   }
 
   return (
@@ -69,6 +79,9 @@ const NewsCard = ({
             alt={title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
             loading="lazy"
+            onError={(e) => {
+              e.currentTarget.src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
+            }}
           />
           {/* Category Badge */}
           <span className="absolute top-3 left-3 px-3 py-1 bg-nepal-red text-white text-sm font-medium rounded-full shadow-lg nepali-text">
@@ -114,7 +127,7 @@ const NewsCard = ({
             </div>
           </div>
 
-          {/* Actions */}
+          {/* Actions - NOT inside Link, use buttons only */}
           <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
             <button
               onClick={handleLike}
@@ -127,13 +140,16 @@ const NewsCard = ({
               <ThumbsUp className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
               <span className="text-sm font-medium">{likeCount}</span>
             </button>
-            <Link
-              href={`/news/${id}#comments`}
+
+            {/* ✅ Fixed: Changed Link to button to avoid nested Link issue */}
+            <button
+              onClick={handleCommentClick}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition"
             >
               <MessageCircle className="w-4 h-4" />
               <span className="text-sm font-medium">{comments}</span>
-            </Link>
+            </button>
+
             <button
               onClick={handleShare}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition ml-auto"

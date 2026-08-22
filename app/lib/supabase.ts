@@ -1,19 +1,19 @@
-// ✅ Fix — use service role for server-side operations
 import { createClient } from '@supabase/supabase-js'
 
-// For API routes (server-side) — uses service role, bypasses RLS
-export const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!  // ← Full access
-)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 // For public frontend — uses anon key, respects RLS
-export const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!  // ← Read only
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// For API routes (server-side only) — uses service role, bypasses RLS
+// Falls back to anon key if service role not available
+export const supabaseAdmin = createClient(
+  supabaseUrl,
+  process.env.SUPABASE_SERVICE_ROLE_KEY || supabaseAnonKey
 )
 
-// Database types (we'll expand this later)
+// Database types
 export type Article = {
   id: string
   source_id: string
