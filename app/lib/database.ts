@@ -1,12 +1,10 @@
 import { supabase } from './supabase'
 
 // Fetch all articles with their category and source info
-export async function getArticles(limit = 20, categorySlug?: string) {
-  console.log('🔍 Fetching articles...')
-  console.log('Limit:', limit)
-  console.log('Category slug:', categorySlug)
+export async function getArticles(limit = 20) {
+  console.log('🔍 Fetching articles... limit:', limit)
 
-  let query = supabase
+  const { data, error } = await supabase
     .from('articles')
     .select(`
       *,
@@ -23,20 +21,12 @@ export async function getArticles(limit = 20, categorySlug?: string) {
     `)
     .eq('status', 'published')
     .not('nepali_title', 'is', null)
-    .order('translated_at', { ascending: false })
+    .order('published_at', { ascending: false })
     .limit(limit)
 
-  if (categorySlug) {
-    query = query.eq('categories.slug', categorySlug)
-  }
+  console.log('✅ Articles found:', data?.length || 0)
+  console.log('❌ Error:', error)
 
-  const { data, error } = await query
-
-  console.log('✅ Query completed')
-  console.log('Articles found:', data?.length || 0)
-  console.log('First article:', data?.[0])
-  console.log('Error:', error)
-  
   if (error) {
     console.error('❌ Error fetching articles:', error)
     return []
@@ -56,6 +46,7 @@ export async function getTrendingArticles(limit = 5) {
       published_at
     `)
     .eq('status', 'published')
+    .not('nepali_title', 'is', null)
     .order('view_count', { ascending: false })
     .limit(limit)
 
@@ -67,13 +58,26 @@ export async function getTrendingArticles(limit = 5) {
   return data || []
 }
 
-// Fetch articles by category
+// Fetch articles by category — fixed: 2-step query, no !inner join
 export async function getArticlesByCategory(categorySlug: string, limit = 4) {
+  // Step 1: Get category ID from slug
+  const { data: category, error: catError } = await supabase
+    .from('categories')
+    .select('id')
+    .eq('slug', categorySlug)
+    .single()
+
+  if (catError || !category) {
+    console.error('Category not found:', categorySlug)
+    return []
+  }
+
+  // Step 2: Fetch articles by category_id directly
   const { data, error } = await supabase
     .from('articles')
     .select(`
       *,
-      categories!inner (
+      categories (
         name_en,
         name_ne,
         slug,
@@ -83,8 +87,9 @@ export async function getArticlesByCategory(categorySlug: string, limit = 4) {
         name
       )
     `)
-    .eq('categories.slug', categorySlug)
+    .eq('category_id', category.id)
     .eq('status', 'published')
+    .not('nepali_title', 'is', null)
     .order('published_at', { ascending: false })
     .limit(limit)
 
@@ -160,13 +165,7 @@ export async function getReactionCounts(articleId: string) {
     return { like: 0, love: 0, wow: 0, sad: 0, angry: 0 }
   }
 
-  const counts = {
-    like: 0,
-    love: 0,
-    wow: 0,
-    sad: 0,
-    angry: 0
-  }
+  const counts = { like: 0, love: 0, wow: 0, sad: 0, angry: 0 }
 
   data?.forEach(reaction => {
     if (reaction.reaction_type in counts) {
@@ -241,7 +240,6 @@ export async function addReaction(
     .single()
 
   if (error) {
-    // If duplicate (user already reacted), delete it (toggle)
     if (error.code === '23505') {
       await supabase
         .from('reactions')
