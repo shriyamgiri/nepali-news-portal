@@ -8,7 +8,6 @@ import NewsCard from '../components/NewsCard'
 import TrendingNews from '../components/TrendingNews'
 import { supabase } from '../lib/supabase'
 
-export const dynamic = 'force-dynamic'
 
 const VALID_CATEGORIES = ['politics', 'economy', 'sports', 'tech', 'entertainment', 'world', 'health']
 
