@@ -22,7 +22,8 @@ export async function getArticles(limit = 20, categorySlug?: string) {
       )
     `)
     .eq('status', 'published')
-    .order('published_at', { ascending: false })
+    .not('nepali_title', 'is', null)
+    .order('translated_at', { ascending: false })
     .limit(limit)
 
   if (categorySlug) {

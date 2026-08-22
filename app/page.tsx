@@ -8,6 +8,7 @@ import AdSlot from './components/AdSlot'
 import { getArticles, getArticlesByCategory } from './lib/database'
 
 export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 export default async function Home() {
   // Fetch real data from database
