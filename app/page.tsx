@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import Header from './components/Header'
 import Footer from './components/Footer'
 import BreakingNews from './components/BreakingNews'
@@ -7,8 +10,6 @@ import CategorySection from './components/CategorySection'
 import AdSlot from './components/AdSlot'
 import { getArticles, getArticlesByCategory } from './lib/database'
 
-export const dynamic = 'force-dynamic'
-export const revalidate = 0
 
 export default async function Home() {
   // Fetch real data from database
