@@ -2,36 +2,25 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
+// ✅ supabaseAdmin bypasses RLS for all write operations
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
-// ── Production config ──
 const genAI         = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
-const PRIMARY_MODEL = 'gemini-2.5-flash'    // 1500 req/day FREE
-const BACKUP_MODEL  = 'gemini-1.5-flash' // fallback if primary fails
-const BATCH_SIZE    = 10   // safe batch for free tier
-const DELAY_MS      = 2000 // 2s between articles
+const MODEL_PRIMARY = 'gemini-1.5-flash'
+const MODEL_BACKUP  = 'gemini-2.0-flash'
+const BATCH_SIZE    = 10
+const DELAY_MS      = 2000
 
 export async function POST() {
   try {
-    console.log('🌐 Translation pipeline starting...')
-
-    // ── Reset any stuck articles first ──
-    const { count: stuckCount } = await supabase
+    // Reset stuck articles (stuck > 10 mins)
+    await supabase
       .from('articles')
-      .select('*', { count: 'exact', head: true })
+      .update({ status: 'fetched', updated_at: new Date().toISOString() })
       .eq('status', 'translating')
-      .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString()) // stuck > 10 mins
+      .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
 
-    if (stuckCount && stuckCount > 0) {
-      await supabase
-        .from('articles')
-        .update({ status: 'fetched' })
-        .eq('status', 'translating')
-        .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
-      console.log(`🔧 Reset ${stuckCount} stuck articles`)
-    }
-
-    // ── Get articles pending translation ──
+    // Get articles to translate
     const { data: articles, error } = await supabase
       .from('articles')
       .select('*')
@@ -40,7 +29,7 @@ export async function POST() {
       .order('published_at', { ascending: false })
       .limit(BATCH_SIZE)
 
-    if (error) throw new Error(`DB fetch failed: ${error.message}`)
+    if (error) throw new Error(`DB error: ${error.message}`)
 
     if (!articles?.length) {
       return NextResponse.json({
@@ -50,33 +39,29 @@ export async function POST() {
       })
     }
 
-    console.log(`📝 Translating ${articles.length} articles...`)
+    console.log(`📝 Translating ${articles.length} articles using ${MODEL_PRIMARY}...`)
 
     let successCount = 0
     let failCount    = 0
     const results    = []
 
     for (const article of articles) {
-      const startTime = Date.now()
-      console.log(`\n🔄 [${articles.indexOf(article) + 1}/${articles.length}] ${article.original_title?.substring(0, 50)}`)
+      const start = Date.now()
+      console.log(`\n🔄 ${article.original_title?.substring(0, 55)}`)
 
       try {
-        // Mark as translating with timestamp
+        // Mark as in-progress
         await supabase
           .from('articles')
           .update({ status: 'translating', updated_at: new Date().toISOString() })
           .eq('id', article.id)
 
-        // Try primary model first, fallback to backup
         const translated = await translateWithFallback(
-          article.original_title,
-          article.original_summary || article.original_content?.substring(0, 800) || '',
+          article.original_title || '',
+          article.original_summary || '',
           article.original_content || ''
         )
 
-        const duration = Date.now() - startTime
-
-        // Save translation
         const { error: updateError } = await supabase
           .from('articles')
           .update({
@@ -91,25 +76,23 @@ export async function POST() {
 
         if (updateError) throw new Error(`DB update failed: ${updateError.message}`)
 
-        // Log success
         await supabase.from('translation_logs').insert({
           article_id:              article.id,
-          model_used:              PRIMARY_MODEL,
+          model_used:              MODEL_PRIMARY,
           source_language:         article.original_language || 'en',
           target_language:         'ne',
           status:                  'success',
-          translation_duration_ms: duration,
+          translation_duration_ms: Date.now() - start,
         })
 
         successCount++
-        console.log(`   ✅ Done in ${duration}ms`)
-        results.push({ id: article.id, status: 'success', duration: `${duration}ms` })
+        console.log(`  ✅ Done (${Date.now() - start}ms)`)
+        results.push({ id: article.id, status: 'success' })
 
       } catch (err: any) {
         failCount++
-        console.error(`   ❌ Failed: ${err.message}`)
+        console.error(`  ❌ ${err.message}`)
 
-        // Reset to fetched for retry next cycle
         await supabase
           .from('articles')
           .update({ status: 'fetched', updated_at: new Date().toISOString() })
@@ -117,7 +100,7 @@ export async function POST() {
 
         await supabase.from('translation_logs').insert({
           article_id:      article.id,
-          model_used:      PRIMARY_MODEL,
+          model_used:      MODEL_PRIMARY,
           source_language: article.original_language || 'en',
           target_language: 'ne',
           status:          'failed',
@@ -127,141 +110,77 @@ export async function POST() {
         results.push({ id: article.id, status: 'failed', error: err.message })
       }
 
-      // Delay between articles
-      if (articles.indexOf(article) < articles.length - 1) {
-        await sleep(DELAY_MS)
-      }
+      await sleep(DELAY_MS)
     }
-
-    console.log(`\n✅ Batch complete: ${successCount} success, ${failCount} failed`)
 
     return NextResponse.json({
       success: true,
       summary: {
-        total_processed: articles.length,
-        successful:      successCount,
-        failed:          failCount,
-        stuck_reset:     stuckCount || 0,
+        total:      articles.length,
+        successful: successCount,
+        failed:     failCount,
       },
       results,
     })
 
   } catch (err: any) {
-    console.error('❌ Translation pipeline error:', err)
+    console.error('❌ Translation error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
 
-// ── Translate with primary model, fallback to backup ──
-async function translateWithFallback(
-  title: string,
-  summary: string,
-  content: string
-): Promise<{ title: string; summary: string; content: string }> {
-
-  // Try primary model
+async function translateWithFallback(title: string, summary: string, content: string) {
   try {
-    return await callGemini(PRIMARY_MODEL, title, summary, content)
-  } catch (primaryErr: any) {
-    const is429 = primaryErr.message?.includes('429') || primaryErr.message?.includes('quota')
-
-    if (is429) {
-      console.log(`   ⚠️ Primary model quota hit, trying backup model...`)
-      // Wait before trying backup
+    return await callModel(MODEL_PRIMARY, title, summary, content)
+  } catch (e: any) {
+    const isQuota = e.message?.includes('429') || e.message?.includes('quota')
+    if (isQuota) {
+      console.log(`  ⚠️ Quota hit on ${MODEL_PRIMARY}, trying ${MODEL_BACKUP}...`)
       await sleep(5000)
-      try {
-        return await callGemini(BACKUP_MODEL, title, summary, content)
-      } catch (backupErr: any) {
-        console.error(`   ❌ Backup model also failed: ${backupErr.message}`)
-        throw new Error(`Both models failed. Primary: ${primaryErr.message}`)
-      }
+      return await callModel(MODEL_BACKUP, title, summary, content)
     }
-
-    throw primaryErr
+    throw e
   }
 }
 
-// ── Call Gemini with retry ──
-async function callGemini(
-  modelName: string,
-  title: string,
-  summary: string,
-  content: string,
-  retries = 2
-): Promise<{ title: string; summary: string; content: string }> {
-
+async function callModel(modelName: string, title: string, summary: string, content: string, retries = 2) {
   const model  = genAI.getGenerativeModel({ model: modelName })
-  const prompt = buildPrompt(title, summary, content)
+  const source = content.length > 100 ? content : (summary || content)
+  const prompt = `You are a professional Nepali news journalist. Translate this article to formal Nepali.
+
+RULES:
+1. Keep proper nouns AS-IS: Trump, Modi, Nepal, BBC, UN, Delhi, Kathmandu
+2. Formal journalistic Nepali (पत्रकारिता शैली)
+3. Do NOT add or change any facts
+4. Expand short content to 3 paragraphs using available facts
+
+Title: ${title}
+Content: ${source.substring(0, 1500)}
+
+Reply ONLY with JSON (no markdown):
+{"title":"nepali title","summary":"2-3 sentence nepali summary","content":"3-4 paragraph nepali content separated by \\n\\n"}`
 
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     try {
-      const result   = await model.generateContent(prompt)
-      const response = await result.response
-      const text     = response.text()
-      return parseResponse(text)
-
-    } catch (err: any) {
-      const is429   = err.message?.includes('429') || err.message?.includes('quota')
-      const isLast  = attempt === retries + 1
-
-      if (isLast) throw err
-
-      // Extract wait time from error or use exponential backoff
-      const retryMatch = err.message?.match(/retry in (\d+)/)
-      const waitSecs   = retryMatch ? parseInt(retryMatch[1]) + 2 : attempt * 10
-
-      console.log(`   ⏳ Attempt ${attempt} failed${is429 ? ' (rate limit)' : ''}. Waiting ${waitSecs}s...`)
-      await sleep(waitSecs * 1000)
+      const result = await model.generateContent(prompt)
+      const text   = result.response.text()
+      return parseJSON(text)
+    } catch (e: any) {
+      if (attempt > retries) throw e
+      const wait = e.message?.match(/retry in (\d+)/)?.[1]
+      await sleep(wait ? parseInt(wait) * 1000 + 2000 : attempt * 8000)
     }
   }
-
   throw new Error('Max retries exceeded')
 }
 
-// ── Build translation prompt ──
-function buildPrompt(title: string, summary: string, content: string): string {
-  const text = content.length > 200 ? content : (summary || content)
-  const truncated = text.substring(0, 1500) // limit tokens
-
-  return `You are a professional Nepali news journalist. Translate this news article to formal Nepali.
-
-RULES:
-1. Keep proper nouns AS-IS: names (Trump, Modi, Sharma), places (Delhi, London, Kathmandu), organizations (UN, BBC, NASA), countries
-2. Use formal journalistic Nepali (पत्रकारिता शैली)
-3. Be factually accurate — do NOT add or change any information
-4. If content is short, expand to 3 paragraphs using available facts
-5. Keep numbers and dates in original form
-
-ARTICLE:
-Title: ${title}
-Content: ${truncated}
-
-Respond ONLY with this JSON (no other text, no markdown):
-{"title":"nepali title here","summary":"2-3 sentence nepali summary","content":"3-4 paragraph nepali content separated by \\n\\n"}`
+function parseJSON(text: string) {
+  let clean = text.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  const match = clean.match(/\{[\s\S]*\}/)
+  if (match) clean = match[0]
+  const p = JSON.parse(clean)
+  if (!p.title) throw new Error('No title in response')
+  return { title: p.title, summary: p.summary || '', content: p.content || p.summary || '' }
 }
 
-// ── Parse AI response ──
-function parseResponse(text: string): { title: string; summary: string; content: string } {
-  let clean = text.trim()
-    .replace(/```json\n?/g, '')
-    .replace(/```\n?/g, '')
-    .trim()
-
-  // Sometimes model adds text before/after JSON
-  const jsonMatch = clean.match(/\{[\s\S]*\}/)
-  if (jsonMatch) clean = jsonMatch[0]
-
-  const parsed = JSON.parse(clean)
-
-  if (!parsed.title) throw new Error('No title in translation response')
-
-  return {
-    title:   parsed.title   || '',
-    summary: parsed.summary || '',
-    content: parsed.content || parsed.summary || '',
-  }
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
+function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }

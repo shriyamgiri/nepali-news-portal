@@ -2,6 +2,7 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import Parser from 'rss-parser'
+// ✅ Use supabaseAdmin for ALL operations in API routes
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 const parser = new Parser({ timeout: 10000 })
@@ -10,7 +11,6 @@ export async function POST() {
   try {
     console.log('🚀 Smart fetch starting...')
 
-    // ── Load active sources ──
     const { data: sources } = await supabase
       .from('sources')
       .select('*')
@@ -20,7 +20,6 @@ export async function POST() {
       return NextResponse.json({ message: 'No active sources' })
     }
 
-    // ── Load ALL active trending keywords (manual + auto from Google Trends) ──
     const { data: trendingTopics } = await supabase
       .from('trending_topics')
       .select('keyword, priority, source')
@@ -28,29 +27,13 @@ export async function POST() {
       .order('priority', { ascending: false })
 
     const keywords = trendingTopics || []
+    console.log(`📡 ${sources.length} sources | 🔥 ${keywords.length} keywords`)
 
-    console.log(`📡 ${sources.length} sources`)
-    console.log(`🔥 ${keywords.filter(k => k.source === 'auto').length} Google Trends keywords`)
-    console.log(`✏️  ${keywords.filter(k => k.source === 'manual').length} manual keywords`)
-
-    if (!keywords.length) {
-      console.log('⚠️ No trending topics found — fetching without filter')
-    }
-
-    // ── Scan all RSS feeds ──
     interface ScoredArticle {
-      title:           string
-      content:         string
-      summary:         string
-      url:             string
-      imageUrl:        string | null
-      author:          string | null
-      publishedAt:     string
-      sourceId:        string
-      sourceName:      string
-      language:        string
-      category:        string
-      score:           number
+      title: string; content: string; summary: string
+      url: string; imageUrl: string | null; author: string | null
+      publishedAt: string; sourceId: string; sourceName: string
+      language: string; category: string; score: number
       matchedKeywords: string[]
     }
 
@@ -64,7 +47,7 @@ export async function POST() {
         const feed = await Promise.race([
           parser.parseURL(feedUrl),
           new Promise<never>((_, reject) =>
-            setTimeout(() => reject(new Error('Timeout 12s')), 12000)
+            setTimeout(() => reject(new Error('Timeout')), 12000)
           ),
         ]) as Awaited<ReturnType<typeof parser.parseURL>>
 
@@ -72,37 +55,30 @@ export async function POST() {
           if (!item.link || !item.title) continue
 
           const text = (item.title + ' ' + (item.contentSnippet || item.description || '')).toLowerCase()
-
-          let score            = 0
+          let score = 0
           const matchedKeywords: string[] = []
 
-          // Score against trending keywords
           for (const kw of keywords) {
             if (text.includes(kw.keyword.toLowerCase())) {
               score += kw.priority || 5
-              matchedKeywords.push(`${kw.keyword}(${kw.source})`)
+              matchedKeywords.push(kw.keyword)
             }
           }
 
-          // If no keywords and keywords exist, skip this article
+          // If keywords exist but no match — skip
           if (score === 0 && keywords.length > 0) continue
-
-          // If no keywords defined at all, give base score
           if (keywords.length === 0) score = 5
 
           // Recency bonus
           if (item.pubDate) {
             const ageHrs = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
-            if (ageHrs < 1)       score += 6
-            else if (ageHrs < 3)  score += 4
-            else if (ageHrs < 6)  score += 2
-            else if (ageHrs > 24) score -= 3 // old article penalty
+            if (ageHrs < 1)      score += 6
+            else if (ageHrs < 3) score += 4
+            else if (ageHrs < 6) score += 2
           }
 
-          // Image and content bonuses
           const imageUrl = extractImageUrl(item.content || item.description || '')
           if (imageUrl || item.enclosure?.url) score += 2
-          if ((item.content || '').length > 300) score += 2
 
           allArticles.push({
             title:           item.title,
@@ -121,62 +97,47 @@ export async function POST() {
           })
         }
 
-        // Update last fetched
         await supabase
           .from('sources')
           .update({ last_fetched_at: new Date().toISOString() })
           .eq('id', source.id)
 
       } catch (err: any) {
-        console.error(`⚠️  ${source.name}: ${err.message}`)
+        console.error(`⚠️ ${source.name}: ${err.message}`)
         await supabase.from('fetch_logs').insert({
-          source_id:     source.id,
-          status:        'failed',
-          error_message: err.message,
-          articles_found: 0,
-          articles_new:  0,
-          articles_duplicate: 0,
-          started_at:    new Date().toISOString(),
-          completed_at:  new Date().toISOString(),
+          source_id: source.id, status: 'failed',
+          error_message: err.message, articles_found: 0,
+          articles_new: 0, articles_duplicate: 0,
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
         })
       }
     }
 
-    console.log(`\n📊 ${allArticles.length} trending articles found across all sources`)
+    console.log(`📊 ${allArticles.length} trending articles found`)
 
-    // ── Deduplicate same story from multiple sources ──
+    // Deduplicate
     const deduplicated = deduplicateByTitle(allArticles)
-    console.log(`🔄 ${deduplicated.length} unique stories after dedup`)
 
-    // ── Filter already-stored articles ──
+    // Filter already-stored
     const urls = deduplicated.map(a => a.url)
     const { data: existing } = await supabase
       .from('articles')
       .select('original_url')
       .in('original_url', urls.slice(0, 100))
 
-    const existingUrls = new Set(existing?.map(e => e.original_url) || [])
+    const existingUrls = new Set(existing?.map((e: any) => e.original_url) || [])
     const newArticles  = deduplicated.filter(a => !existingUrls.has(a.url))
-    console.log(`🆕 ${newArticles.length} genuinely new stories`)
 
-    // ── Pick TOP 10 by score ──
-    const top10 = newArticles
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 10)
+    // Top 10 by score
+    const top10 = newArticles.sort((a, b) => b.score - a.score).slice(0, 10)
 
-    console.log(`\n⭐ TOP 10 selected:`)
-    top10.forEach((a, i) =>
-      console.log(`  ${i + 1}. [${a.score}pts] ${a.title.substring(0, 55)} | ${a.matchedKeywords.slice(0, 3).join(', ')}`)
-    )
+    console.log(`⭐ Saving top ${top10.length} articles`)
 
-    // ── Store TOP 10 ──
     let savedCount = 0
     for (const article of top10) {
       const { data: category } = await supabase
-        .from('categories')
-        .select('id')
-        .eq('slug', article.category)
-        .single()
+        .from('categories').select('id').eq('slug', article.category).single()
 
       const { error } = await supabase.from('articles').insert({
         source_id:         article.sourceId,
@@ -199,7 +160,6 @@ export async function POST() {
       else console.error('Insert error:', error.message)
     }
 
-    // Log overall fetch
     await supabase.from('fetch_logs').insert({
       status:             'success',
       articles_found:     allArticles.length,
@@ -212,43 +172,28 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       summary: {
-        sources_scanned:   sources.length,
-        trending_matched:  allArticles.length,
-        unique_stories:    deduplicated.length,
-        new_stories:       newArticles.length,
-        saved:             savedCount,
-        keywords_active:   keywords.length,
-        google_trends:     keywords.filter(k => k.source === 'auto').length,
-        manual_topics:     keywords.filter(k => k.source === 'manual').length,
+        sources_scanned:  sources.length,
+        trending_matched: allArticles.length,
+        new_stories:      newArticles.length,
+        saved:            savedCount,
       },
     })
 
   } catch (err: any) {
-    console.error('❌ Smart fetch error:', err)
+    console.error('❌ Fetch error:', err)
     return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }
 
-// ── Deduplicate: same story = keep highest score ──
 function deduplicateByTitle(articles: any[]): any[] {
   const sorted = [...articles].sort((a, b) => b.score - a.score)
   const seen   = new Set<string>()
   const result = []
-
   for (const a of sorted) {
-    const fp = a.title
-      .toLowerCase()
-      .replace(/[^a-z\s]/g, '')
-      .split(/\s+/)
-      .filter((w: string) => w.length > 4)
-      .sort()
-      .slice(0, 5)
-      .join('|')
-
-    if (!seen.has(fp)) {
-      seen.add(fp)
-      result.push(a)
-    }
+    const fp = a.title.toLowerCase().replace(/[^a-z\s]/g, '')
+      .split(/\s+/).filter((w: string) => w.length > 4)
+      .sort().slice(0, 5).join('|')
+    if (!seen.has(fp)) { seen.add(fp); result.push(a) }
   }
   return result
 }
