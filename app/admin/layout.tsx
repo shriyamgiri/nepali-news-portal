@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { LayoutDashboard, Globe, FileText, MessageSquare, TrendingUp, LogOut, DollarSign } from 'lucide-react'
+import { LayoutDashboard, Globe, FileText, MessageSquare, TrendingUp, LogOut, Settings } from 'lucide-react'
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
@@ -77,6 +78,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     { href: '/admin/advertisements', label: 'Advertisements', icon: DollarSign },
     { href: '/admin/trending', label: 'Trending Topics', icon: TrendingUp },
     { href: '/admin/facebook', label: 'Facebook', icon: Globe },
+    { href: '/admin/config', label: 'Editorial Settings', icon: Settings },
   ]
 
   function isActive(href: string) {

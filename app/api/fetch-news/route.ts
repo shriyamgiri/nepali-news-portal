@@ -2,7 +2,6 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import Parser from 'rss-parser'
-// ✅ Use supabaseAdmin for ALL operations in API routes
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 const parser = new Parser({ timeout: 10000 })
@@ -11,6 +10,26 @@ export async function POST() {
   try {
     console.log('🚀 Smart fetch starting...')
 
+    // ── Load Editorial Config from DB ──
+    const { data: configData } = await supabase
+      .from('editorial_config')
+      .select('config_key, config_value')
+
+    const config: Record<string, string> = {}
+    configData?.forEach((item: any) => {
+      config[item.config_key] = item.config_value
+    })
+
+    // Config values (with fallbacks)
+    const NEPAL_BONUS     = parseInt(config.nepal_keyword_bonus || '40')
+    const MIN_SCORE       = parseInt(config.min_score_to_save || '3')
+    const TOP_N           = parseInt(config.translate_batch_size || '10')
+    const NEPAL_KEYWORDS  = (config.nepal_keywords || 'nepal,kathmandu,nepali,himalaya,pokhara')
+      .split(',').map((k: string) => k.trim().toLowerCase())
+
+    console.log(`📋 Config loaded: Nepal bonus=${NEPAL_BONUS}, Min score=${MIN_SCORE}`)
+
+    // ── Load Active Sources ──
     const { data: sources } = await supabase
       .from('sources')
       .select('*')
@@ -20,6 +39,7 @@ export async function POST() {
       return NextResponse.json({ message: 'No active sources' })
     }
 
+    // ── Load Trending Topics ──
     const { data: trendingTopics } = await supabase
       .from('trending_topics')
       .select('keyword, priority, source')
@@ -27,22 +47,55 @@ export async function POST() {
       .order('priority', { ascending: false })
 
     const keywords = trendingTopics || []
-    console.log(`📡 ${sources.length} sources | 🔥 ${keywords.length} keywords`)
+    console.log(`📡 ${sources.length} sources | 🔥 ${keywords.length} trending keywords`)
+
+    // ── Load Active Sports Events ──
+    const { data: sportsEvents } = await supabase
+      .from('sports_events')
+      .select('keywords, score_boost, event_name')
+      .eq('is_active', true)
+
+    const sportKeywords: { keyword: string; boost: number; event: string }[] = []
+    sportsEvents?.forEach((event: any) => {
+      event.keywords.split(',').forEach((kw: string) => {
+        sportKeywords.push({
+          keyword: kw.trim().toLowerCase(),
+          boost: event.score_boost,
+          event: event.event_name,
+        })
+      })
+    })
+
+    console.log(`⚽ ${sportKeywords.length} sport keywords active`)
 
     interface ScoredArticle {
-      title: string; content: string; summary: string
-      url: string; imageUrl: string | null; author: string | null
-      publishedAt: string; sourceId: string; sourceName: string
-      language: string; category: string; score: number
+      title: string
+      content: string
+      summary: string
+      url: string
+      imageUrl: string | null
+      author: string | null
+      publishedAt: string
+      sourceId: string
+      sourceName: string
+      language: string
+      category: string
+      score: number
       matchedKeywords: string[]
+      isBreaking: boolean
+      nepalRelated: boolean
     }
 
     const allArticles: ScoredArticle[] = []
 
+    // ── Process Each Source ──
     for (const source of sources) {
       try {
         const feedUrl = source.rss_feed_url || await detectRssFeed(source.website_url)
-        if (!feedUrl) continue
+        if (!feedUrl) {
+          console.log(`⚠️ No RSS feed for ${source.name}`)
+          continue
+        }
 
         const feed = await Promise.race([
           parser.parseURL(feedUrl),
@@ -54,10 +107,15 @@ export async function POST() {
         for (const item of feed.items || []) {
           if (!item.link || !item.title) continue
 
-          const text = (item.title + ' ' + (item.contentSnippet || item.description || '')).toLowerCase()
+          const text = (
+            item.title + ' ' +
+            (item.contentSnippet || item.description || '')
+          ).toLowerCase()
+
           let score = 0
           const matchedKeywords: string[] = []
 
+          // ── 1. Trending Keywords Score ──
           for (const kw of keywords) {
             if (text.includes(kw.keyword.toLowerCase())) {
               score += kw.priority || 5
@@ -65,28 +123,54 @@ export async function POST() {
             }
           }
 
-          // If keywords exist but no match — skip
-          // Nepal bonus - always prioritize Nepal content
-          const isNepalRelated = text.includes('nepal') ||
-                                 text.includes('kathmandu') ||
-                                 text.includes('nepali') ||
-                                text.includes('himalaya')
-
-          if (isNepalRelated) score += 15
-
-          // Never skip - give minimum score
-          if (score === 0) score = 3
-
-          // Recency bonus
-          if (item.pubDate) {
-            const ageHrs = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
-            if (ageHrs < 1)      score += 6
-            else if (ageHrs < 3) score += 4
-            else if (ageHrs < 6) score += 2
+          // ── 2. Nepal Relevance Score ──
+          const isNepalRelated = NEPAL_KEYWORDS.some(kw => text.includes(kw))
+          if (isNepalRelated) {
+            score += NEPAL_BONUS
+            matchedKeywords.push('🇳🇵 Nepal')
           }
 
+          // ── 3. Sports Events Score ──
+          for (const sport of sportKeywords) {
+            if (text.includes(sport.keyword)) {
+              score += sport.boost
+              matchedKeywords.push(`⚽ ${sport.event}`)
+              break // One sport boost per article
+            }
+          }
+
+          // ── 4. Breaking News Detection ──
+          const breakingWords = (
+            config.breaking_keywords ||
+            'breaking,urgent,alert,just in,developing,exclusive,flash'
+          ).split(',').map((k: string) => k.trim().toLowerCase())
+
+          const isBreaking = breakingWords.some(bw => text.includes(bw))
+          if (isBreaking) {
+            score += 20
+            matchedKeywords.push('🔴 Breaking')
+          }
+
+          // ── 5. Source Credibility Score ──
+          const credibilityBoost = (source.credibility_score || 5) * 
+            parseInt(config.source_credibility_multiplier || '2')
+          score += credibilityBoost
+
+          // ── 6. Recency Score ──
+          if (item.pubDate) {
+            const ageHrs = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
+            if (ageHrs < 0.5)     score += parseInt(config.recency_30min_bonus || '10')
+            else if (ageHrs < 1)  score += parseInt(config.recency_1hr_bonus || '8')
+            else if (ageHrs < 3)  score += parseInt(config.recency_3hr_bonus || '5')
+            else if (ageHrs < 6)  score += parseInt(config.recency_6hr_bonus || '2')
+          }
+
+          // ── 7. Image Bonus ──
           const imageUrl = extractImageUrl(item.content || item.description || '')
           if (imageUrl || item.enclosure?.url) score += 2
+
+          // ── Never skip - minimum score ──
+          if (score < MIN_SCORE) score = MIN_SCORE
 
           allArticles.push({
             title:           item.title,
@@ -102,9 +186,12 @@ export async function POST() {
             category:        determineCategory(item, source),
             score,
             matchedKeywords,
+            isBreaking,
+            nepalRelated:    isNepalRelated,
           })
         }
 
+        // Update last fetched
         await supabase
           .from('sources')
           .update({ last_fetched_at: new Date().toISOString() })
@@ -113,21 +200,24 @@ export async function POST() {
       } catch (err: any) {
         console.error(`⚠️ ${source.name}: ${err.message}`)
         await supabase.from('fetch_logs').insert({
-          source_id: source.id, status: 'failed',
-          error_message: err.message, articles_found: 0,
-          articles_new: 0, articles_duplicate: 0,
-          started_at: new Date().toISOString(),
-          completed_at: new Date().toISOString(),
+          source_id:         source.id,
+          status:            'failed',
+          error_message:     err.message,
+          articles_found:    0,
+          articles_new:      0,
+          articles_duplicate: 0,
+          started_at:        new Date().toISOString(),
+          completed_at:      new Date().toISOString(),
         })
       }
     }
 
-    console.log(`📊 ${allArticles.length} trending articles found`)
+    console.log(`📊 ${allArticles.length} total articles scored`)
 
-    // Deduplicate
+    // ── Deduplicate by title ──
     const deduplicated = deduplicateByTitle(allArticles)
 
-    // Filter already-stored
+    // ── Filter already stored ──
     const urls = deduplicated.map(a => a.url)
     const { data: existing } = await supabase
       .from('articles')
@@ -135,39 +225,60 @@ export async function POST() {
       .in('original_url', urls.slice(0, 100))
 
     const existingUrls = new Set(existing?.map((e: any) => e.original_url) || [])
-    const newArticles  = deduplicated.filter(a => !existingUrls.has(a.url))
+    const newArticles = deduplicated.filter(a => !existingUrls.has(a.url))
 
-    // Top 10 by score
-    const top10 = newArticles.sort((a, b) => b.score - a.score).slice(0, 10)
+    // ── Save top N by score ──
+    const topArticles = newArticles
+      .sort((a, b) => b.score - a.score)
+      .slice(0, TOP_N)
 
-    console.log(`⭐ Saving top ${top10.length} articles`)
+    console.log(`⭐ Saving top ${topArticles.length} articles`)
 
     let savedCount = 0
-    for (const article of top10) {
+
+    for (const article of topArticles) {
       const { data: category } = await supabase
-        .from('categories').select('id').eq('slug', article.category).single()
+        .from('categories')
+        .select('id')
+        .eq('slug', article.category)
+        .single()
+
+      // Breaking news expiry
+      const breakingExpiresAt = article.isBreaking
+        ? new Date(Date.now() + 90 * 60 * 1000).toISOString()
+        : null
 
       const { error } = await supabase.from('articles').insert({
-        source_id:         article.sourceId,
-        category_id:       category?.id || null,
-        original_title:    article.title,
-        original_content:  article.content,
-        original_summary:  article.summary,
-        original_language: article.language,
-        original_url:      article.url,
-        image_url:         article.imageUrl || 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800',
-        author:            article.author,
-        published_at:      article.publishedAt,
-        status:            'fetched',
-        view_count:        0,
-        like_count:        0,
-        comment_count:     0,
+        source_id:           article.sourceId,
+        category_id:         category?.id || null,
+        original_title:      article.title,
+        original_content:    article.content,
+        original_summary:    article.summary,
+        original_language:   article.language,
+        original_url:        article.url,
+        image_url:           article.imageUrl ||
+          'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800',
+        author:              article.author,
+        published_at:        article.publishedAt,
+        status:              'fetched',
+        priority_score:      article.score,
+        is_breaking:         article.isBreaking,
+        breaking_expires_at: breakingExpiresAt,
+        nepal_related:       article.nepalRelated,
+        view_count:          0,
+        like_count:          0,
+        comment_count:       0,
       })
 
-      if (!error) savedCount++
-      else console.error('Insert error:', error.message)
+      if (!error) {
+        savedCount++
+        console.log(`  ✅ [${article.score}pts] ${article.title.substring(0, 50)}`)
+      } else {
+        console.error('Insert error:', error.message)
+      }
     }
 
+    // ── Log fetch results ──
     await supabase.from('fetch_logs').insert({
       status:             'success',
       articles_found:     allArticles.length,
@@ -180,10 +291,12 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       summary: {
-        sources_scanned:  sources.length,
-        trending_matched: allArticles.length,
-        new_stories:      newArticles.length,
-        saved:            savedCount,
+        sources_scanned:   sources.length,
+        total_scored:      allArticles.length,
+        new_stories:       newArticles.length,
+        saved:             savedCount,
+        nepal_bonus_used:  NEPAL_BONUS,
+        sport_events_active: sportsEvents?.length || 0,
       },
     })
 
@@ -193,21 +306,34 @@ export async function POST() {
   }
 }
 
+// ── Helper Functions ──
+
 function deduplicateByTitle(articles: any[]): any[] {
   const sorted = [...articles].sort((a, b) => b.score - a.score)
   const seen   = new Set<string>()
   const result = []
   for (const a of sorted) {
-    const fp = a.title.toLowerCase().replace(/[^a-z\s]/g, '')
-      .split(/\s+/).filter((w: string) => w.length > 4)
-      .sort().slice(0, 5).join('|')
-    if (!seen.has(fp)) { seen.add(fp); result.push(a) }
+    const fp = a.title.toLowerCase()
+      .replace(/[^a-z\s]/g, '')
+      .split(/\s+/)
+      .filter((w: string) => w.length > 4)
+      .sort()
+      .slice(0, 5)
+      .join('|')
+    if (!seen.has(fp)) {
+      seen.add(fp)
+      result.push(a)
+    }
   }
   return result
 }
 
 function determineCategory(item: any, source: any): string {
-  const t = ((item.title || '') + ' ' + (item.contentSnippet || '')).toLowerCase()
+  const t = (
+    (item.title || '') + ' ' +
+    (item.contentSnippet || '')
+  ).toLowerCase()
+
   if (t.match(/election|government|parliament|minister|politics|party/)) return 'politics'
   if (t.match(/economy|business|trade|market|stock|bank|finance/))       return 'economy'
   if (t.match(/sport|football|cricket|ipl|game|player|match|champion/)) return 'sports'
@@ -221,10 +347,13 @@ async function detectRssFeed(url: string): Promise<string | null> {
   for (const p of ['/rss', '/rss.xml', '/feed', '/feed.xml', '/index.xml']) {
     try {
       const r = await fetch(url.replace(/\/$/, '') + p, {
-        method: 'HEAD', signal: AbortSignal.timeout(4000),
+        method: 'HEAD',
+        signal: AbortSignal.timeout(4000),
       })
       if (r.ok) return url.replace(/\/$/, '') + p
-    } catch { continue }
+    } catch {
+      continue
+    }
   }
   return null
 }
