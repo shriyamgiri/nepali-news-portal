@@ -33,6 +33,9 @@ const NewsCard = ({
   comments,
   likes,
   featured = false,
+  isBreaking = false,
+  nepalRelated = false,
+  priorityScore = 0,
 }: NewsCardProps) => {
   const [isLiked, setIsLiked] = useState(false)
   const [likeCount, setLikeCount] = useState(likes)
@@ -52,14 +55,9 @@ const NewsCard = ({
     e.preventDefault()
     e.stopPropagation()
     if (navigator.share) {
-      navigator.share({
-        title: title,
-        text: summary,
-        url: `/news/${id}`,
-      })
+      navigator.share({ title, text: summary, url: `/news/${id}` })
     } else {
       navigator.clipboard.writeText(`${window.location.origin}/news/${id}`)
-      alert('लिंक कपी भयो!')
     }
   }
 
@@ -69,11 +67,8 @@ const NewsCard = ({
   }
 
   return (
-    <article
-      className={`group bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 ${
-        featured ? 'md:col-span-2 md:row-span-2' : ''
-      }`}
-    >
+    <article className={`group bg-white rounded-xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border ${isBreaking ? 'border-red-300 ring-1 ring-red-200' : 'border-gray-100'
+      } ${featured ? 'md:col-span-2 md:row-span-2' : ''}`}>
       <Link href={`/news/${id}`} className="block">
         {/* Image */}
         <div className="relative overflow-hidden aspect-video bg-gray-200">
@@ -86,6 +81,7 @@ const NewsCard = ({
               e.currentTarget.src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
             }}
           />
+
           {/* Breaking Badge */}
           {isBreaking && (
             <span className="absolute top-3 left-3 px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full shadow-lg animate-pulse flex items-center gap-1">
@@ -102,11 +98,11 @@ const NewsCard = ({
 
           {/* Nepal Badge */}
           {nepalRelated && !isBreaking && (
-            <span className="absolute top-3 right-3 px-2 py-1 bg-blue-600 text-white text-xs font-medium rounded-full shadow-lg">
+            <span className="absolute top-3 right-16 px-2 py-1 bg-blue-600 text-white text-xs font-medium rounded-full shadow-lg">
               🇳🇵
             </span>
           )}
-          
+
           {/* Source Badge */}
           <span className="absolute bottom-3 right-3 px-2 py-1 bg-black/70 text-white text-xs rounded backdrop-blur-sm">
             स्रोत: {source}
@@ -115,21 +111,22 @@ const NewsCard = ({
 
         {/* Content */}
         <div className="p-4 md:p-5">
+          {/* Breaking label inside card */}
+          {isBreaking && (
+            <span className="inline-block px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded mb-2 nepali-text">
+              {category}
+            </span>
+          )}
+
           {/* Title */}
-          <h3
-            className={`font-bold text-gray-800 mb-2 line-clamp-2 group-hover:text-nepal-blue transition nepali-text ${
-              featured ? 'text-xl md:text-2xl' : 'text-lg'
-            }`}
-          >
+          <h3 className={`font-bold text-gray-800 mb-2 line-clamp-2 group-hover:text-nepal-blue transition nepali-text ${featured ? 'text-xl md:text-2xl' : 'text-lg'
+            }`}>
             {title}
           </h3>
 
           {/* Summary */}
-          <p
-            className={`text-gray-600 mb-4 nepali-text ${
-              featured ? 'line-clamp-3 text-base' : 'line-clamp-2 text-sm'
-            }`}
-          >
+          <p className={`text-gray-600 mb-4 nepali-text ${featured ? 'line-clamp-3 text-base' : 'line-clamp-2 text-sm'
+            }`}>
             {summary}
           </p>
 
@@ -147,21 +144,17 @@ const NewsCard = ({
             </div>
           </div>
 
-          {/* Actions - NOT inside Link, use buttons only */}
+          {/* Actions */}
           <div className="flex items-center gap-4 mt-3 pt-3 border-t border-gray-100">
             <button
               onClick={handleLike}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition ${
-                isLiked
-                  ? 'bg-red-50 text-red-600'
-                  : 'hover:bg-gray-100 text-gray-600'
-              }`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full transition ${isLiked ? 'bg-red-50 text-red-600' : 'hover:bg-gray-100 text-gray-600'
+                }`}
             >
               <ThumbsUp className={`w-4 h-4 ${isLiked ? 'fill-current' : ''}`} />
               <span className="text-sm font-medium">{likeCount}</span>
             </button>
 
-            {/* ✅ Fixed: Changed Link to button to avoid nested Link issue */}
             <button
               onClick={handleCommentClick}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-full hover:bg-gray-100 text-gray-600 transition"
