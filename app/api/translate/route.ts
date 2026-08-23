@@ -2,14 +2,14 @@ export const dynamic = 'force-dynamic'
 
 import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
-// ✅ supabaseAdmin bypasses RLS for all write operations
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 const genAI         = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const MODEL_PRIMARY = 'gemini-2.5-flash'
 const MODEL_BACKUP  = 'gemini-2.5-flash-lite'
-const BATCH_SIZE    = 10
-const DELAY_MS      = 2000
+const BATCH_SIZE    = 3
+const DELAY_MS      = 200
+const TIMEOUT_MS    = 15000 // 15 seconds per article max
 
 export async function POST() {
   try {
@@ -39,7 +39,7 @@ export async function POST() {
       })
     }
 
-    console.log(`📝 Translating ${articles.length} articles using ${MODEL_PRIMARY}...`)
+    console.log(`📝 Translating ${articles.length} articles...`)
 
     let successCount = 0
     let failCount    = 0
@@ -56,11 +56,20 @@ export async function POST() {
           .update({ status: 'translating', updated_at: new Date().toISOString() })
           .eq('id', article.id)
 
-        const translated = await translateWithFallback(
-          article.original_title || '',
-          article.original_summary || '',
-          article.original_content || ''
-        )
+        // ✅ Add 15 second timeout per article
+        const translated = await Promise.race([
+          translateWithFallback(
+            article.original_title || '',
+            article.original_summary || '',
+            article.original_content || ''
+          ),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error('Translation timeout after 15s')),
+              TIMEOUT_MS
+            )
+          )
+        ])
 
         const { error: updateError } = await supabase
           .from('articles')
@@ -87,12 +96,13 @@ export async function POST() {
 
         successCount++
         console.log(`  ✅ Done (${Date.now() - start}ms)`)
-        results.push({ id: article.id, status: 'success' })
+        results.push({ id: article.id, status: 'success', duration: `${Date.now() - start}ms` })
 
       } catch (err: any) {
         failCount++
         console.error(`  ❌ ${err.message}`)
 
+        // Reset article back to fetched for retry
         await supabase
           .from('articles')
           .update({ status: 'fetched', updated_at: new Date().toISOString() })
@@ -135,17 +145,26 @@ async function translateWithFallback(title: string, summary: string, content: st
   } catch (e: any) {
     const isQuota = e.message?.includes('429') || e.message?.includes('quota')
     if (isQuota) {
-      console.log(`  ⚠️ Quota hit on ${MODEL_PRIMARY}, trying ${MODEL_BACKUP}...`)
-      await sleep(5000)
+      console.log(`  ⚠️ Quota hit, trying ${MODEL_BACKUP}...`)
+      await sleep(3000)
       return await callModel(MODEL_BACKUP, title, summary, content)
     }
     throw e
   }
 }
 
-async function callModel(modelName: string, title: string, summary: string, content: string, retries = 2) {
-  const model  = genAI.getGenerativeModel({ model: modelName })
-  const source = content.length > 100 ? content : (summary || content)
+async function callModel(
+  modelName: string,
+  title: string,
+  summary: string,
+  content: string,
+  retries = 1  // Reduced from 2 to 1
+) {
+  const model = genAI.getGenerativeModel({ model: modelName })
+
+  // ✅ Use only summary or short content to stay within timeout
+  const source = summary || content.substring(0, 300)
+
   const prompt = `You are a professional Nepali news journalist. Translate this article to formal Nepali.
 
 RULES:
@@ -155,7 +174,7 @@ RULES:
 4. Expand short content to 3 paragraphs using available facts
 
 Title: ${title}
-Content: ${source.substring(0, 1500)}
+Content: ${source.substring(0, 500)}
 
 Reply ONLY with JSON (no markdown):
 {"title":"nepali title","summary":"2-3 sentence nepali summary","content":"3-4 paragraph nepali content separated by \\n\\n"}`
@@ -167,20 +186,32 @@ Reply ONLY with JSON (no markdown):
       return parseJSON(text)
     } catch (e: any) {
       if (attempt > retries) throw e
-      const wait = e.message?.match(/retry in (\d+)/)?.[1]
-      await sleep(wait ? parseInt(wait) * 1000 + 2000 : attempt * 8000)
+      // Short wait on retry
+      await sleep(attempt * 3000)
     }
   }
   throw new Error('Max retries exceeded')
 }
 
 function parseJSON(text: string) {
-  let clean = text.trim().replace(/```json\n?/g, '').replace(/```\n?/g, '').trim()
+  let clean = text.trim()
+    .replace(/```json\n?/g, '')
+    .replace(/```\n?/g, '')
+    .trim()
+
   const match = clean.match(/\{[\s\S]*\}/)
   if (match) clean = match[0]
+
   const p = JSON.parse(clean)
   if (!p.title) throw new Error('No title in response')
-  return { title: p.title, summary: p.summary || '', content: p.content || p.summary || '' }
+
+  return {
+    title:   p.title,
+    summary: p.summary || '',
+    content: p.content || p.summary || '',
+  }
 }
 
-function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)) }
+function sleep(ms: number) {
+  return new Promise(r => setTimeout(r, ms))
+}
