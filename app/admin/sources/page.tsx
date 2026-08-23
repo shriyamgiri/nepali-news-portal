@@ -48,8 +48,8 @@ export default function SourcesManagement() {
   const loadSources = async () => {
     try {
       const response = await fetch('/api/admin/sources')
-      const data = await response.json()
-      setSources(data.sources || [])
+      const sourcesList = Array.isArray(data) ? data : (data.sources || [])
+      setSources(sourcesList)
     } catch (error) {
       console.error('Error loading sources:', error)
       alert('Failed to load sources')
