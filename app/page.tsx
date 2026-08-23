@@ -4,6 +4,7 @@ export const revalidate = 0
 import Header from './components/Header'
 import Footer from './components/Footer'
 import BreakingNews from './components/BreakingNews'
+import BreakingCardSection from './components/BreakingCardSection'
 import NewsCard from './components/NewsCard'
 import TrendingNews from './components/TrendingNews'
 import CategorySection from './components/CategorySection'
@@ -47,13 +48,16 @@ export default async function Home() {
       {/* 1. Single Combined Header */}
       <Header />
 
-      {/* 2. Ticker + Breaking Card (after nav, inside BreakingNews component) */}
+      {/* 2. Ticker - always visible, just below nav */}
       <BreakingNews />
 
-      {/* 3. Advertisement Below Ticker */}
+      {/* 3. Advertisement - above breaking card */}
       <AdSlot position="header" className="w-full" />
 
-      {/* 4. Main Content */}
+      {/* 4. Breaking Large Card - only when breaking news exists */}
+      <BreakingCardSection />
+
+      {/* 5. Main Content */}
       <main className="container mx-auto px-4 py-8">
 
         {/* Main Articles Grid */}
