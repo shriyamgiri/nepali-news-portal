@@ -1,139 +1,237 @@
 'use client'
 
 import Link from 'next/link'
-import { Search, Menu, X, Globe } from 'lucide-react'
-import { useState } from 'react'
-import AdSlot from './AdSlot'
-// Add inside your header, below the nav:
-<AdSlot position="header" className="w-full my-2" />
+import { Search, Menu, X, Facebook, Youtube, Twitter } from 'lucide-react'
+import { useState, useEffect } from 'react'
+
+const categories = [
+  { name: 'गृहपृष्ठ', slug: '/', icon: '🏠' },
+  { name: 'राजनीति', slug: '/politics', icon: '⚖️' },
+  { name: 'अर्थतन्त्र', slug: '/economy', icon: '💼' },
+  { name: 'खेलकुद', slug: '/sports', icon: '⚽' },
+  { name: 'प्रविधि', slug: '/tech', icon: '💻' },
+  { name: 'मनोरञ्जन', slug: '/entertainment', icon: '🎬' },
+  { name: 'विश्व', slug: '/world', icon: '🌍' },
+  { name: 'स्वास्थ्य', slug: '/health', icon: '🏥' },
+]
+
+function useNepaliDateTime() {
+  const [dateTime, setDateTime] = useState({ date: '', time: '', day: '' })
+
+  useEffect(() => {
+    const update = () => {
+      const now = new Date()
+      const nepaliDays = ['आइतबार', 'सोमबार', 'मंगलबार', 'बुधबार', 'बिहीबार', 'शुक्रबार', 'शनिबार']
+      const nepaliMonths = ['बैशाख', 'जेठ', 'असार', 'साउन', 'भदौ', 'असोज', 'कार्तिक', 'मंसिर', 'पुस', 'माघ', 'फागुन', 'चैत']
+
+      const day = nepaliDays[now.getDay()]
+
+      // Simple Nepali date approximation
+      const month = nepaliMonths[now.getMonth()]
+      const year = now.getFullYear() + 57 // Approximate BS year
+
+      // Nepali numerals
+      const toNepaliNum = (n: number) => {
+        const nums = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९']
+        return String(n).split('').map(d => nums[parseInt(d)] || d).join('')
+      }
+
+      const hours = now.getHours()
+      const mins = now.getMinutes()
+      const ampm = hours >= 12 ? 'बजे' : 'बजे'
+      const h = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
+
+      setDateTime({
+        day,
+        date: `${month} ${toNepaliNum(now.getDate())}, ${toNepaliNum(year)}`,
+        time: `${toNepaliNum(h)}:${toNepaliNum(mins).padStart(2, '०')} ${ampm}`,
+      })
+    }
+
+    update()
+    const interval = setInterval(update, 60000)
+    return () => clearInterval(interval)
+  }, [])
+
+  return dateTime
+}
 
 const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-
-  const categories = [
-    { name: 'गृहपृष्ठ', slug: '/', icon: '🏠' },
-    { name: 'राजनीति', slug: '/politics', icon: '⚖️' },
-    { name: 'अर्थतन्त्र', slug: '/economy', icon: '💼' },
-    { name: 'खेलकुद', slug: '/sports', icon: '⚽' },
-    { name: 'प्रविधि', slug: '/tech', icon: '💻' },
-    { name: 'मनोरञ्जन', slug: '/entertainment', icon: '🎬' },
-    { name: 'विश्व', slug: '/world', icon: '🌍' },
-    { name: 'स्वास्थ्य', slug: '/health', icon: '🏥' },
-  ]
+  const { date, time, day } = useNepaliDateTime()
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-md">
-      {/* Top Bar */}
-      <div className="bg-gradient-to-r from-nepal-blue to-nepal-red text-white">
-        <div className="container mx-auto px-4 py-2 flex justify-between items-center text-sm">
-          <div className="flex items-center gap-2">
-            <Globe className="w-4 h-4" />
-            <span>विश्वभरका समाचार नेपालीमा</span>
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="hidden md:inline">आइतबार, वैशाख २, २०८२</span>
-            <span className="text-xs bg-white/20 px-2 py-1 rounded">LIVE</span>
-          </div>
-        </div>
-      </div>
 
-      {/* Main Header */}
-      <div className="container mx-auto px-4 py-4">
-        <div className="flex items-center justify-between">
-          {/* Logo */}
-          <Link href="/" className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-nepal-blue to-nepal-red rounded-lg flex items-center justify-center text-white font-bold text-xl shadow-lg">
-              ने
-            </div>
-            <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-gray-800 nepali-text">
-                GN Nepal
-              </h1>
-              <p className="text-xs text-gray-500">विश्वभरका समाचार नेपालीमा</p>
-            </div>
-          </Link>
-
-          {/* Desktop Search & Menu Toggle */}
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="p-2 hover:bg-gray-100 rounded-full transition"
-              aria-label="Search"
-            >
-              <Search className="w-5 h-5 text-gray-600" />
-            </button>
-            <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="md:hidden p-2 hover:bg-gray-100 rounded-full transition"
-              aria-label="Menu"
-            >
-              {isMenuOpen ? (
-                <X className="w-6 h-6 text-gray-600" />
-              ) : (
-                <Menu className="w-6 h-6 text-gray-600" />
-              )}
-            </button>
-          </div>
-        </div>
-
-        {/* Search Bar */}
-        {isSearchOpen && (
-          <div className="mt-4 animate-fadeIn">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder="समाचार खोज्नुहोस्..."
-                className="w-full px-4 py-3 pr-12 border-2 border-gray-200 rounded-lg focus:border-nepal-blue focus:outline-none nepali-text"
-                autoFocus
-              />
-              <button className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-nepal-blue text-white rounded-md hover:bg-nepal-blue/90 transition">
-                खोज्नुहोस्
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Navigation - Desktop */}
-      <nav className="hidden md:block border-t border-gray-200 bg-gray-50">
+      {/* ── Single Combined Header ── */}
+      <div className="bg-white border-b border-gray-100">
         <div className="container mx-auto px-4">
-          <ul className="flex items-center justify-center gap-1 py-1">
-            {categories.map((category) => (
-              <li key={category.slug}>
-                <Link
-                  href={category.slug}
-                  className="flex items-center gap-2 px-4 py-2.5 text-gray-700 hover:text-nepal-blue hover:bg-white rounded-md transition font-medium nepali-text"
-                >
-                  <span>{category.icon}</span>
-                  <span>{category.name}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </nav>
+          <div className="flex items-center justify-between h-16 md:h-20">
 
-      {/* Mobile Navigation */}
-      {isMenuOpen && (
-        <nav className="md:hidden border-t border-gray-200 bg-white animate-slideDown">
-          <ul className="py-2">
-            {categories.map((category) => (
-              <li key={category.slug}>
-                <Link
-                  href={category.slug}
-                  onClick={() => setIsMenuOpen(false)}
-                  className="flex items-center gap-3 px-6 py-3 text-gray-700 hover:bg-gray-50 active:bg-gray-100 transition nepali-text font-medium"
+            {/* Logo */}
+            <Link href="/" className="flex items-center gap-3 flex-shrink-0">
+              <div className="w-10 h-10 md:w-12 md:h-12 bg-gradient-to-br from-nepal-blue to-nepal-red rounded-xl flex items-center justify-center text-white font-bold text-lg md:text-xl shadow-lg">
+                ने
+              </div>
+              <div>
+                <h1 className="text-xl md:text-2xl font-bold text-gray-900 leading-tight">
+                  GN Nepal
+                </h1>
+                <p className="text-xs text-gray-500 nepali-text hidden sm:block">
+                  विश्वभरका समाचार नेपालीमा
+                </p>
+              </div>
+            </Link>
+
+            {/* Center: Date & Time (desktop) */}
+            <div className="hidden lg:flex flex-col items-center">
+              <p className="text-sm font-semibold text-gray-700 nepali-text">
+                {day}, {date}
+              </p>
+              <p className="text-xs text-gray-500 nepali-text">{time}</p>
+            </div>
+
+            {/* Right: Actions */}
+            <div className="flex items-center gap-2 md:gap-3">
+
+              {/* Social Icons (desktop) */}
+              <div className="hidden md:flex items-center gap-2">
+
+                href="https://facebook.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-8 h-8 bg-blue-600 hover:bg-blue-700 text-white rounded-full flex items-center justify-center transition"
                 >
-                  <span className="text-xl">{category.icon}</span>
-                  <span>{category.name}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
-      )}
-    </header>
+                <Facebook className="w-4 h-4" />
+              </a>
+
+              href="https://youtube.com"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="w-8 h-8 bg-red-600 hover:bg-red-700 text-white rounded-full flex items-center justify-center transition"
+                >
+              <Youtube className="w-4 h-4" />
+            </a>
+
+            href="https://twitter.com"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-8 h-8 bg-gray-900 hover:bg-black text-white rounded-full flex items-center justify-center transition"
+                >
+            <Twitter className="w-4 h-4" />
+          </a>
+        </div>
+
+        {/* Divider */}
+        <div className="hidden md:block w-px h-6 bg-gray-200" />
+
+        {/* LIVE Badge */}
+        <div className="flex items-center gap-1.5 bg-red-600 text-white px-2.5 py-1 rounded-full">
+          <span className="w-1.5 h-1.5 bg-white rounded-full animate-pulse" />
+          <span className="text-xs font-bold tracking-wide">LIVE</span>
+        </div>
+
+        {/* Search */}
+        <button
+          onClick={() => setIsSearchOpen(!isSearchOpen)}
+          className="p-2 hover:bg-gray-100 rounded-full transition"
+          aria-label="Search"
+        >
+          <Search className="w-5 h-5 text-gray-600" />
+        </button>
+
+        {/* Mobile Menu */}
+        <button
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          className="md:hidden p-2 hover:bg-gray-100 rounded-full transition"
+          aria-label="Menu"
+        >
+          {isMenuOpen
+            ? <X className="w-6 h-6 text-gray-600" />
+            : <Menu className="w-6 h-6 text-gray-600" />
+          }
+        </button>
+      </div>
+    </div>
+
+          {/* Search Bar */ }
+  {
+    isSearchOpen && (
+      <div className="pb-3">
+        <div className="relative">
+          <input
+            type="text"
+            placeholder="समाचार खोज्नुहोस्..."
+            className="w-full px-4 py-3 pr-32 border-2 border-gray-200 rounded-xl focus:border-nepal-blue focus:outline-none nepali-text text-sm"
+            autoFocus
+          />
+          <button className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-1.5 bg-nepal-blue text-white rounded-lg hover:bg-nepal-blue/90 transition text-sm nepali-text">
+            खोज्नुहोस्
+          </button>
+        </div>
+      </div>
+    )
+  }
+        </div >
+      </div >
+
+  {/* ── Navigation Bar ── */ }
+  < nav className = "hidden md:block bg-gradient-to-r from-nepal-blue to-nepal-red" >
+    <div className="container mx-auto px-4">
+      <ul className="flex items-center justify-center gap-0">
+        {categories.map((category) => (
+          <li key={category.slug}>
+            <Link
+              href={category.slug}
+              className="flex items-center gap-1.5 px-3 py-3 text-white/90 hover:text-white hover:bg-white/10 transition font-medium nepali-text text-sm"
+            >
+              <span className="text-base">{category.icon}</span>
+              <span>{category.name}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+    </div>
+      </nav >
+
+  {/* ── Mobile Navigation ── */ }
+{
+  isMenuOpen && (
+    <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
+      {/* Mobile date */}
+      <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+        <p className="text-xs text-gray-500 nepali-text">{day}, {date} · {time}</p>
+      </div>
+      <ul className="py-1">
+        {categories.map((category) => (
+          <li key={category.slug}>
+            <Link
+              href={category.slug}
+              onClick={() => setIsMenuOpen(false)}
+              className="flex items-center gap-3 px-4 py-3 text-gray-700 hover:bg-gray-50 transition nepali-text"
+            >
+              <span className="text-xl">{category.icon}</span>
+              <span className="font-medium">{category.name}</span>
+            </Link>
+          </li>
+        ))}
+      </ul>
+      {/* Mobile social */}
+      <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
+        <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
+          className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 text-white rounded-lg text-sm">
+          <Facebook className="w-4 h-4" /> Facebook
+        </a>
+        <a href="https://youtube.com" target="_blank" rel="noopener noreferrer"
+          className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-600 text-white rounded-lg text-sm">
+          <Youtube className="w-4 h-4" /> YouTube
+        </a>
+      </div>
+    </div>
+  )
+}
+    </header >
   )
 }
 
