@@ -16,33 +16,65 @@ const categories = [
 ]
 
 function useNepaliDateTime() {
-  const [dateTime, setDateTime] = useState({ date: '', time: '', day: '' })
+  const [dateTime, setDateTime] = useState({
+    nepaliDate: '',
+    englishDate: '',
+    time: '',
+    day: '',
+  })
 
   useEffect(() => {
     const update = () => {
-      const now = new Date()
-      const nepaliDays = ['आइतबार', 'सोमबार', 'मंगलबार', 'बुधबार', 'बिहीबार', 'शुक्रबार', 'शनिबार']
-      const nepaliMonths = ['बैशाख', 'जेठ', 'असार', 'साउन', 'भदौ', 'असोज', 'कार्तिक', 'मंसिर', 'पुस', 'माघ', 'फागुन', 'चैत']
+      const now = new Date(
+        new Date().toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' })
+      )
+
+      const nepaliDays = [
+        'आइतबार', 'सोमबार', 'मंगलबार',
+        'बुधबार', 'बिहीबार', 'शुक्रबार', 'शनिबार',
+      ]
+      const nepaliMonths = [
+        'बैशाख', 'जेठ', 'असार', 'साउन', 'भदौ', 'असोज',
+        'कार्तिक', 'मंसिर', 'पुस', 'माघ', 'फागुन', 'चैत',
+      ]
+      const englishMonths = [
+        'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+        'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+      ]
+      const englishDays = [
+        'Sunday', 'Monday', 'Tuesday', 'Wednesday',
+        'Thursday', 'Friday', 'Saturday',
+      ]
 
       const toNepaliNum = (n: number) => {
         const nums = ['०', '१', '२', '३', '४', '५', '६', '७', '८', '९']
-        return String(n).split('').map(d => nums[parseInt(d)] || d).join('')
+        return String(n).split('').map(d => nums[parseInt(d)] ?? d).join('')
       }
 
       const hours = now.getHours()
-      const mins = now.getMinutes()
-      const h = hours > 12 ? hours - 12 : hours === 0 ? 12 : hours
-      const ampm = hours >= 12 ? 'बजे' : 'बजे'
+      const minutes = now.getMinutes()
+      const seconds = now.getSeconds()
+
+      const time = [
+        String(hours).padStart(2, '0'),
+        String(minutes).padStart(2, '0'),
+        String(seconds).padStart(2, '0'),
+      ].join(':')
+
+      const englishDate = `${englishDays[now.getDay()]}, ${englishMonths[now.getMonth()]} ${now.getDate()}, ${now.getFullYear()}`
+      const bsYear = now.getFullYear() + 56
+      const nepaliDate = `${nepaliMonths[now.getMonth()]} ${toNepaliNum(now.getDate())}, ${toNepaliNum(bsYear)}`
 
       setDateTime({
         day: nepaliDays[now.getDay()],
-        date: `${nepaliMonths[now.getMonth()]} ${toNepaliNum(now.getDate())}, ${toNepaliNum(now.getFullYear() + 57)}`,
-        time: `${toNepaliNum(h)}:${toNepaliNum(mins).padStart(2, '०')} ${ampm}`,
+        nepaliDate,
+        englishDate,
+        time,
       })
     }
 
     update()
-    const interval = setInterval(update, 60000)
+    const interval = setInterval(update, 1000)
     return () => clearInterval(interval)
   }, [])
 
@@ -52,10 +84,12 @@ function useNepaliDateTime() {
 export default function Header() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const { date, time, day } = useNepaliDateTime()
+  const { nepaliDate, englishDate, time, day } = useNepaliDateTime()
 
   return (
     <header className="sticky top-0 z-50 bg-white shadow-md">
+
+      {/* ── Combined Header ── */}
       <div className="bg-white border-b border-gray-100">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16 md:h-20">
@@ -75,15 +109,20 @@ export default function Header() {
               </div>
             </Link>
 
-            {/* Center: Date and Time */}
-            <div className="hidden lg:flex flex-col items-center">
-              <p className="text-sm font-semibold text-gray-700 nepali-text">
-                {day}, {date}
+            {/* Center: Dates + Time */}
+            <div className="hidden lg:flex flex-col items-center text-center gap-0.5">
+              <p className="text-xs font-semibold text-nepal-blue nepali-text">
+                {day}, {nepaliDate}
               </p>
-              <p className="text-xs text-gray-500 nepali-text">{time}</p>
+              <p className="text-xs text-gray-500">
+                {englishDate}
+              </p>
+              <p className="text-sm font-bold text-gray-800 font-mono tracking-widest">
+                🕐 {time} <span className="text-xs font-normal text-gray-400">NPT</span>
+              </p>
             </div>
 
-            {/* Right Actions */}
+            {/* Right: Social + LIVE + Search + Menu */}
             <div className="flex items-center gap-2 md:gap-3">
               <div className="hidden md:flex items-center gap-2">
                 <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
@@ -147,7 +186,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* Navigation Bar */}
+      {/* ── Desktop Navigation ── */}
       <nav className="hidden md:block bg-gradient-to-r from-nepal-blue to-nepal-red">
         <div className="container mx-auto px-4">
           <ul className="flex items-center justify-center">
@@ -166,13 +205,15 @@ export default function Header() {
         </div>
       </nav>
 
-      {/* Mobile Navigation */}
+      {/* ── Mobile Navigation ── */}
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
           <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
-            <p className="text-xs text-gray-500 nepali-text">
-              {day}, {date} · {time}
+            <p className="text-xs font-semibold text-nepal-blue nepali-text">
+              {day}, {nepaliDate}
             </p>
+            <p className="text-xs text-gray-500">{englishDate}</p>
+            <p className="text-xs font-mono text-gray-700">🕐 {time} NPT</p>
           </div>
           <ul className="py-1">
             {categories.map((category) => (
@@ -190,11 +231,11 @@ export default function Header() {
           </ul>
           <div className="px-4 py-3 border-t border-gray-100 flex gap-3">
             <a href="https://facebook.com" target="_blank" rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 text-white rounded-lg text-sm">
+              className="flex-1 flex items-center justify-center gap-2 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium">
               <Facebook className="w-4 h-4" /> Facebook
             </a>
             <a href="https://youtube.com" target="_blank" rel="noopener noreferrer"
-              className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-600 text-white rounded-lg text-sm">
+              className="flex-1 flex items-center justify-center gap-2 py-2 bg-red-600 text-white rounded-lg text-sm font-medium">
               <Youtube className="w-4 h-4" /> YouTube
             </a>
           </div>
