@@ -46,17 +46,18 @@ export default function SourcesManagement() {
   }, [])
 
   const loadSources = async () => {
-    try {
-      const response = await fetch('/api/admin/sources')
-      const sourcesList = Array.isArray(data) ? data : (data.sources || [])
-      setSources(sourcesList)
-    } catch (error) {
-      console.error('Error loading sources:', error)
-      alert('Failed to load sources')
-    } finally {
-      setLoading(false)
-    }
+  try {
+    const response = await fetch('/api/admin/sources')
+    const data = await response.json()
+    const sourcesList = Array.isArray(data) ? data : (data.sources || [])
+    setSources(sourcesList)
+  } catch (error) {
+    console.error('Error loading sources:', error)
+    alert('Failed to load sources')
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleAddSource = async (e: React.FormEvent) => {
     e.preventDefault()
