@@ -21,11 +21,12 @@ export async function getArticles(limit = 20) {
     `)
     .eq('status', 'published')
     .not('nepali_title', 'is', null)
+    .order('priority_score', { ascending: false })
     .order('published_at', { ascending: false })
     .limit(limit)
 
   console.log('✅ Articles found:', data?.length || 0)
-  console.log('❌ Error:', error)
+  
 
   if (error) {
     console.error('❌ Error fetching articles:', error)

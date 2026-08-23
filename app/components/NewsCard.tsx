@@ -16,6 +16,9 @@ interface NewsCardProps {
   comments: number
   likes: number
   featured?: boolean
+  isBreaking?: boolean
+  nepalRelated?: boolean
+  priorityScore?: number
 }
 
 const NewsCard = ({
@@ -83,10 +86,27 @@ const NewsCard = ({
               e.currentTarget.src = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
             }}
           />
+          {/* Breaking Badge */}
+          {isBreaking && (
+            <span className="absolute top-3 left-3 px-3 py-1 bg-red-600 text-white text-xs font-bold rounded-full shadow-lg animate-pulse flex items-center gap-1">
+              🔴 ब्रेकिङ
+            </span>
+          )}
+
           {/* Category Badge */}
-          <span className="absolute top-3 left-3 px-3 py-1 bg-nepal-red text-white text-sm font-medium rounded-full shadow-lg nepali-text">
-            {category}
-          </span>
+          {!isBreaking && (
+            <span className="absolute top-3 left-3 px-3 py-1 bg-nepal-red text-white text-sm font-medium rounded-full shadow-lg nepali-text">
+              {category}
+            </span>
+          )}
+
+          {/* Nepal Badge */}
+          {nepalRelated && !isBreaking && (
+            <span className="absolute top-3 right-3 px-2 py-1 bg-blue-600 text-white text-xs font-medium rounded-full shadow-lg">
+              🇳🇵
+            </span>
+          )}
+          
           {/* Source Badge */}
           <span className="absolute bottom-3 right-3 px-2 py-1 bg-black/70 text-white text-xs rounded backdrop-blur-sm">
             स्रोत: {source}

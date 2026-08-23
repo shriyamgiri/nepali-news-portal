@@ -1,48 +1,40 @@
-'use client'
+import { supabase } from '../lib/supabase'
+import BreakingNewsTicker from './BreakingNewsTicker'
 
-import { useState, useEffect } from 'react'
-import { AlertCircle } from 'lucide-react'
-import Link from 'next/link'
+export default async function BreakingNews() {
+  // Fetch real breaking news from DB
+  const { data: breakingArticles } = await supabase
+    .from('articles')
+    .select('id, nepali_title, published_at')
+    .eq('status', 'published')
+    .eq('is_breaking', true)
+    .not('nepali_title', 'is', null)
+    .gt('breaking_expires_at', new Date().toISOString())
+    .order('published_at', { ascending: false })
+    .limit(5)
 
-const BreakingNews = () => {
-  const breakingNews = [
-    { id: 1, text: 'काठमाडौंमा नयाँ मेट्रो रेल सेवा सुरु', link: '/news/1' },
-    { id: 2, text: 'नेपाल र चीनबीच ऐतिहासिक व्यापार सम्झौता', link: '/news/2' },
-    { id: 3, text: 'सगरमाथा आधार शिविरमा नयाँ सुविधा', link: '/news/3' },
-  ]
+  // Fallback to latest articles if no breaking news
+  const { data: latestArticles } = !breakingArticles?.length 
+    ? await supabase
+        .from('articles')
+        .select('id, nepali_title, published_at')
+        .eq('status', 'published')
+        .not('nepali_title', 'is', null)
+        .order('published_at', { ascending: false })
+        .limit(5)
+    : { data: null }
 
-  const [currentIndex, setCurrentIndex] = useState(0)
+  const articles = breakingArticles?.length 
+    ? breakingArticles 
+    : latestArticles || []
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentIndex((prev) => (prev + 1) % breakingNews.length)
-    }, 5000)
+  if (!articles.length) return null
 
-    return () => clearInterval(interval)
-  }, [breakingNews.length])
+  const newsItems = articles.map((a: any) => ({
+    id: a.id,
+    text: a.nepali_title,
+    link: `/news/${a.id}`,
+  }))
 
-  return (
-    <div className="bg-gradient-to-r from-nepal-red to-red-600 text-white py-3 shadow-lg">
-      <div className="container mx-auto px-4">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <AlertCircle className="w-5 h-5 animate-pulse" />
-            <span className="font-bold text-sm nepali-text">ताजा समाचार</span>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <Link
-              href={breakingNews[currentIndex].link}
-              className="block hover:underline"
-            >
-              <p className="text-sm nepali-text animate-slideLeft whitespace-nowrap">
-                {breakingNews[currentIndex].text}
-              </p>
-            </Link>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
+  return <BreakingNewsTicker items={newsItems} isBreaking={!!breakingArticles?.length} />
 }
-
-export default BreakingNews

@@ -30,6 +30,9 @@ export default async function Home() {
     views:       article.view_count || 0,
     comments:    article.comment_count || 0,
     likes:       article.like_count || 0,
+    isBreaking:  article.is_breaking || false,
+    priorityScore: article.priority_score || 0,
+    nepalRelated: article.nepal_related || false,
   })
 
   const transformCategoryArticle = (article: any) => ({
