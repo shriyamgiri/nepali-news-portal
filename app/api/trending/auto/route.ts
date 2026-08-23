@@ -81,6 +81,17 @@ const STOP_WORDS = new Set([
   'were','said','each','into','time','over','just','also','some',
   'news','says','amid','back','after','about','which','their',
   'these','those','other','then','than','could','would','there',
+  'wants','against','makes','takes','gives','shows','tells',
+  'gets','puts','sets','lets','asks','uses','goes','comes',
+  'looks','seems','feels','keeps','needs','means','knows','finds',
+  'calls','turns','leads','helps','wins','lost','held','made','came',
+  'want','make','take','give','show','tell','find','call','turn',
+  'lead','help','play','work','live','move','year','week','days',
+  'plan','head','high','open','full','next','last','like','good',
+  'long','hard','able','real','late','away','must','part','home',
+  'hand','much','even','well','such','both','very','only','here',
+  'world','purja','nirmal','against','says','amid','people','first',
+  'using','being','going','doing','having','making','taking','coming'
 ])
 
 export async function POST() { return fetchTrends() }

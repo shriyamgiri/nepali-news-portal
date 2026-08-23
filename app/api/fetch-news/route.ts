@@ -66,8 +66,16 @@ export async function POST() {
           }
 
           // If keywords exist but no match — skip
-          if (score === 0 && keywords.length > 0) continue
-          if (keywords.length === 0) score = 5
+          // Nepal bonus - always prioritize Nepal content
+          const isNepalRelated = text.includes('nepal') ||
+                                 text.includes('kathmandu') ||
+                                 text.includes('nepali') ||
+                                text.includes('himalaya')
+
+          if (isNepalRelated) score += 15
+
+          // Never skip - give minimum score
+          if (score === 0) score = 3
 
           // Recency bonus
           if (item.pubDate) {
