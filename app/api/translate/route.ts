@@ -7,7 +7,7 @@ import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
 const genAI         = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const MODEL_PRIMARY = 'gemini-2.5-flash'
-const MODEL_BACKUP  = 'gemini-1.5-flash-latest'
+const MODEL_BACKUP  = 'gemini-2.5-flash-lite'
 const BATCH_SIZE    = 10
 const DELAY_MS      = 2000
 
