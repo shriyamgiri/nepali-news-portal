@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 
 export const dynamic = 'force-dynamic'
 
@@ -182,16 +182,13 @@ export default function ArticlesManagement() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900">Articles Management</h1>
-          <p className="text-gray-600 mt-1">
-            {timeLabel} · {filtered.length} articles shown
-          </p>
+          <p className="text-gray-600 mt-1">{timeLabel} · {filtered.length} articles shown</p>
         </div>
         <button
           onClick={loadArticles}
           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition text-sm"
         >
-          <RefreshCw className="w-4 h-4" />
-          Refresh
+          <RefreshCw className="w-4 h-4" /> Refresh
         </button>
       </div>
 
@@ -270,9 +267,7 @@ export default function ArticlesManagement() {
                   <button
                     key={t.value}
                     onClick={() => { setTimeRange(t.value); setTimeOpen(false) }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition ${timeRange === t.value
-                        ? 'text-blue-600 font-medium bg-blue-50'
-                        : 'text-gray-700'
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition ${timeRange === t.value ? 'text-blue-600 font-medium bg-blue-50' : 'text-gray-700'
                       }`}
                   >
                     {t.label}
@@ -300,9 +295,7 @@ export default function ArticlesManagement() {
                   <button
                     key={s.value}
                     onClick={() => { setStatusFilter(s.value); setStatusOpen(false) }}
-                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition flex items-center justify-between ${statusFilter === s.value
-                        ? 'text-blue-600 font-medium bg-blue-50'
-                        : 'text-gray-700'
+                    className={`w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 transition flex items-center justify-between ${statusFilter === s.value ? 'text-blue-600 font-medium bg-blue-50' : 'text-gray-700'
                       }`}
                   >
                     <span>{s.label}</span>
@@ -332,7 +325,6 @@ export default function ArticlesManagement() {
             />
           </div>
 
-          {/* Result count */}
           <div className="flex items-center text-sm text-gray-500 whitespace-nowrap">
             {filtered.length} results
           </div>
@@ -411,17 +403,12 @@ export default function ArticlesManagement() {
                             🇳🇵 Nepal
                           </span>
                         )}
-                        <span className={`px-2.5 py-0.5 text-xs rounded-full font-medium ${label === 'published'
-                            ? 'bg-green-100 text-green-700 border border-green-200'
-                            : label === 'backlog'
-                              ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                              : label === 'fetched'
-                                ? 'bg-blue-100 text-blue-700 border border-blue-200'
-                                : label === 'translating'
-                                  ? 'bg-orange-100 text-orange-700 border border-orange-200'
-                                  : label === 'failed'
-                                    ? 'bg-red-100 text-red-700 border border-red-200'
-                                    : 'bg-gray-100 text-gray-700'
+                        <span className={`px-2.5 py-0.5 text-xs rounded-full font-medium ${label === 'published' ? 'bg-green-100  text-green-700  border border-green-200' :
+                            label === 'backlog' ? 'bg-amber-100  text-amber-700  border border-amber-200' :
+                              label === 'fetched' ? 'bg-blue-100   text-blue-700   border border-blue-200' :
+                                label === 'translating' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                                  label === 'failed' ? 'bg-red-100    text-red-700    border border-red-200' :
+                                    'bg-gray-100 text-gray-700'
                           }`}>
                           {label.charAt(0).toUpperCase() + label.slice(1)}
                         </span>
@@ -462,14 +449,14 @@ export default function ArticlesManagement() {
                         <Eye className="w-3.5 h-3.5" /> View
                       </Link>
                       {article.original_url && (
-
-                        href = { article.original_url }
+                        <a
+                          href={article.original_url}
                           target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg transition"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-gray-50 text-gray-700 hover:bg-gray-100 rounded-lg transition"
                         >
-                      <ExternalLink className="w-3.5 h-3.5" /> Original
-                    </a>
+                          <ExternalLink className="w-3.5 h-3.5" /> Original
+                        </a>
                       )}
                     {(article.status === 'fetched' || article.status === 'failed' || isBacklog) && (
                       <button

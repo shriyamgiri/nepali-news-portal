@@ -106,8 +106,7 @@ export async function GET(request: Request) {
       .limit(2)
 
     const uniqueBatches = batchInfo
-      ? [...new Map(batchInfo.map(b => [b.batch_id, b])).entries()]
-        .map(([_, v]) => v)
+      ? Array.from(new Map(batchInfo.map(b => [b.batch_id, b])).values())
       : []
 
     return NextResponse.json({
