@@ -26,11 +26,17 @@ export async function POST(request: Request) {
     }
 
     // Get unique batch IDs ordered by time
-    const uniqueBatches = [
-      ...new Map(batches.map(b => [b.batch_id, b])).values()
-    ].sort((a, b) =>
-      new Date(b.batch_time).getTime() - new Date(a.batch_time).getTime()
-    )
+    // Get unique batch IDs ordered by time
+    const seenIds = new Set<string>()
+    const uniqueBatches = batches
+      .filter(b => {
+        if (seenIds.has(b.batch_id)) return false
+        seenIds.add(b.batch_id)
+        return true
+      })
+      .sort((a, b) =>
+        new Date(b.batch_time).getTime() - new Date(a.batch_time).getTime()
+      )
 
     console.log(`📦 Found ${uniqueBatches.length} batches`)
 
