@@ -224,8 +224,20 @@ export default function ArticlesManagement() {
             <span className="font-semibold text-amber-800">Pipeline batch status: </span>
             {currentBatch && (
               <span className="text-amber-700">
-                Current batch ({formatBatchTime(currentBatch.batch_time)}) active
-                {prevBatch ? ' · ' : ''}
+                {currentBatch && (
+                  <span className="text-amber-700">
+                    Current batch ({formatBatchTime(currentBatch.batch_time)}) active
+                    {prevBatch && ' · '}
+                  </span>
+                )}
+                {prevBatch ? (
+                  <span className="text-amber-700">
+                    Previous batch ({formatBatchTime(prevBatch.batch_time)}) —{' '}
+                    {counts.backlog} articles in backlog, will be compared and cleaned on next run
+                  </span>
+                ) : (
+                  <span className="text-amber-700"> · No previous batch backlog</span>
+                )}
               </span>
             )}
             {prevBatch ? (
