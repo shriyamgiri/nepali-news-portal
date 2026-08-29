@@ -16,6 +16,12 @@ const categories = [
 ]
 
 function useNepaliDateTime() {
+  const [dateTime, setDateTime] = useState({
+    nepaliDate: '',
+    englishDate: '',
+    time: '',
+    day: '',
+  })
 
   useEffect(() => {
     const update = () => {
@@ -83,7 +89,7 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 bg-white shadow-md">
 
-      {/* ── Combined Header ── */}
+      {/* Combined Header */}
       <div className="bg-white border-b border-gray-100">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16 md:h-20">
@@ -180,7 +186,7 @@ export default function Header() {
         </div>
       </div>
 
-      {/* ── Desktop Navigation ── */}
+      {/* Desktop Navigation */}
       <nav className="hidden md:block bg-gradient-to-r from-nepal-blue to-nepal-red">
         <div className="container mx-auto px-4">
           <ul className="flex items-center justify-center">
@@ -199,7 +205,7 @@ export default function Header() {
         </div>
       </nav>
 
-      {/* ── Mobile Navigation ── */}
+      {/* Mobile Navigation */}
       {isMenuOpen && (
         <div className="md:hidden bg-white border-t border-gray-200 shadow-lg">
           <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
