@@ -16,14 +16,6 @@ const categories = [
 ]
 
 function useNepaliDateTime() {
-  const hours = nepalTime.getUTCHours()
-  const minutes = nepalTime.getUTCMinutes()
-  const seconds = nepalTime.getUTCSeconds()
-  const day = nepaliDays[nepalTime.getUTCDay()]
-
-  const bsYear = nepalTime.getUTCFullYear() + 56
-  const nepaliDate = `${nepaliMonths[nepalTime.getUTCMonth()]} ${toNepaliNum(nepalTime.getUTCDate())}, ${toNepaliNum(bsYear)}`
-  const englishDate = `${englishDays[nepalTime.getUTCDay()]}, ${englishMonths[nepalTime.getUTCMonth()]} ${nepalTime.getUTCDate()}, ${nepalTime.getUTCFullYear()}`
 
   useEffect(() => {
     const update = () => {
