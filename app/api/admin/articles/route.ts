@@ -21,9 +21,24 @@ export async function GET(request: Request) {
       '7d': 10080,
       '30d': 43200,
     }
+
     const minutes = timeMap[timeRange] || 1440
     const sinceDate = new Date(Date.now() - minutes * 60 * 1000).toISOString()
 
+    // ── Get current batch ID ──
+    const { data: latestBatch } = await supabase
+      .from('articles')
+      .select('batch_id')
+      .eq('status', 'fetched')
+      .not('batch_id', 'is', null)
+      .order('batch_time', { ascending: false })
+      .limit(1)
+      .single()
+
+    const currentBatchId = latestBatch?.batch_id || null
+
+    // ── Build main query ──
+    // Use translated_at for published articles, created_at for others
     let query = supabase
       .from('articles')
       .select(`
@@ -31,30 +46,19 @@ export async function GET(request: Request) {
         categories (name_en, name_ne),
         sources (name)
       `)
-      .gte('created_at', sinceDate)
+      .or(`translated_at.gte.${sinceDate},created_at.gte.${sinceDate}`)
       .order('created_at', { ascending: false })
       .limit(limit)
 
     if (status && status !== 'all') {
       if (status === 'backlog') {
-        // Backlog = fetched articles from previous batch
-        // Get current batch_id first
-        const { data: latestBatch } = await supabase
-          .from('articles')
-          .select('batch_id')
-          .eq('status', 'fetched')
-          .not('batch_id', 'is', null)
-          .order('batch_time', { ascending: false })
-          .limit(1)
-          .single()
-
-        if (latestBatch?.batch_id) {
+        if (currentBatchId) {
           query = supabase
             .from('articles')
             .select(`*, categories (name_en, name_ne), sources (name)`)
             .eq('status', 'fetched')
-            .neq('batch_id', latestBatch.batch_id)
-            .gte('created_at', sinceDate)
+            .neq('batch_id', currentBatchId)
+            .or(`translated_at.gte.${sinceDate},created_at.gte.${sinceDate}`)
             .order('created_at', { ascending: false })
             .limit(limit)
         }
@@ -66,48 +70,68 @@ export async function GET(request: Request) {
     const { data, error } = await query
     if (error) throw error
 
-    // Get counts for all statuses within time range
+    // ── Get counts using correct time columns ──
+    const countFilter = `translated_at.gte.${sinceDate},created_at.gte.${sinceDate}`
+
     const [total, published, fetched, failed, translating] = await Promise.all([
-      supabase.from('articles').select('*', { count: 'exact', head: true }).gte('created_at', sinceDate),
-      supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'published').gte('created_at', sinceDate),
-      supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'fetched').gte('created_at', sinceDate),
-      supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'failed').gte('created_at', sinceDate),
-      supabase.from('articles').select('*', { count: 'exact', head: true }).eq('status', 'translating').gte('created_at', sinceDate),
+      supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .or(countFilter),
+      supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'published')
+        .or(countFilter),
+      supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'fetched')
+        .or(countFilter),
+      supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'failed')
+        .or(countFilter),
+      supabase
+        .from('articles')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'translating')
+        .or(countFilter),
     ])
 
-    // Get backlog count (fetched from previous batch)
-    const { data: latestBatch } = await supabase
-      .from('articles')
-      .select('batch_id')
-      .eq('status', 'fetched')
-      .not('batch_id', 'is', null)
-      .order('batch_time', { ascending: false })
-      .limit(1)
-      .single()
-
+    // ── Get backlog count ──
     let backlogCount = 0
-    if (latestBatch?.batch_id) {
+    if (currentBatchId) {
       const { count } = await supabase
         .from('articles')
         .select('*', { count: 'exact', head: true })
         .eq('status', 'fetched')
-        .neq('batch_id', latestBatch.batch_id)
-        .gte('created_at', sinceDate)
+        .neq('batch_id', currentBatchId)
+        .or(countFilter)
       backlogCount = count || 0
     }
 
-    // Get current batch info
+    // ── Get batch info ──
     const { data: batchInfo } = await supabase
       .from('articles')
       .select('batch_id, batch_time')
       .eq('status', 'fetched')
       .not('batch_id', 'is', null)
       .order('batch_time', { ascending: false })
-      .limit(2)
+      .limit(20)
 
-    const uniqueBatches = batchInfo
-      ? Array.from(new Map(batchInfo.map(b => [b.batch_id, b])).values())
-      : []
+    // Get unique batches
+    const seenIds = new Set<string>()
+    const uniqueBatches = (batchInfo || [])
+      .filter(b => {
+        if (seenIds.has(b.batch_id)) return false
+        seenIds.add(b.batch_id)
+        return true
+      })
+      .sort((a, b) =>
+        new Date(b.batch_time).getTime() - new Date(a.batch_time).getTime()
+      )
 
     return NextResponse.json({
       articles: data || [],
@@ -122,6 +146,7 @@ export async function GET(request: Request) {
       currentBatch: uniqueBatches[0] || null,
       previousBatch: uniqueBatches[1] || null,
     })
+
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
