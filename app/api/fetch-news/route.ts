@@ -318,7 +318,7 @@ export async function POST() {
         ? new Date(Date.now() + 90 * 60 * 1000).toISOString()
         : null
 
-      // ── Upgrade image to full size before saving ──
+      // Upgrade image URL where safe to do so
       const finalImageUrl = article.imageUrl
         ? upgradeImageUrl(article.imageUrl)
         : 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
@@ -389,41 +389,58 @@ export async function POST() {
 function upgradeImageUrl(url: string): string {
   if (!url) return url
 
-  // Guardian - upgrade from 140px to 1200px
-  if (url.includes('i.guim.co.uk')) {
+  try {
+    // ❌ Guardian - uses signed URLs, DO NOT modify (changing params breaks signature)
+    if (url.includes('i.guim.co.uk')) {
+      return url
+    }
+
+    // ✅ BBC - no signature, safe to upgrade
+    if (url.includes('ichef.bbci.co.uk')) {
+      return url.replace(/\/ace\/(standard|ws)\/\d+\//, '/ace/$1/1200/')
+    }
+
+    // ✅ The Hindu - no signature, safe to upgrade
+    if (url.includes('thgim.com')) {
+      return url.replace(/LANDSCAPE_\d+/, 'LANDSCAPE_1200')
+    }
+
+    // ✅ OnlineKhabar - WordPress thumbnails, safe to upgrade small ones only
+    if (url.includes('onlinekhabar.com')) {
+      const match = url.match(/-(\d+)x(\d+)\./i)
+      if (match) {
+        const width = parseInt(match[1])
+        // Only upgrade if smaller than 800px to avoid breaking good-sized images
+        if (width < 800) {
+          return url.replace(/-\d+x\d+\./, '-1024x576.')
+        }
+      }
+      return url
+    }
+
+    // ✅ Nepali Times
+    if (url.includes('nepalitimes.com')) {
+      return url.replace(/-\d+x\d+\./, '-1200x630.')
+    }
+
+    // ✅ Kathmandu Post / WordPress sites
+    if (url.includes('kathmandupost.com')) {
+      const match = url.match(/-(\d+)x(\d+)\./i)
+      if (match && parseInt(match[1]) < 800) {
+        return url.replace(/-\d+x\d+\./, '-1200x630.')
+      }
+      return url
+    }
+
+  } catch {
     return url
-      .replace(/width=\d+/, 'width=1200')
-      .replace(/fit=max/, 'fit=max')
-  }
-
-  // BBC - upgrade thumbnail to larger size
-  if (url.includes('ichef.bbci.co.uk')) {
-    return url
-      .replace(/\/ace\/(standard|ws)\/\d+\//, '/ace/$1/1200/')
-      .replace(/\/\d+(\/cpsprodpb\/)/, '/1200$1')
-  }
-
-  // OnlineKhabar WordPress - upgrade to 1024px
-  if (url.includes('onlinekhabar.com')) {
-    return url
-      .replace(/-\d+x\d+\./, '-1024x576.')
-  }
-
-  // The Hindu - upgrade to 1200px
-  if (url.includes('thgim.com')) {
-    return url.replace(/LANDSCAPE_\d+/, 'LANDSCAPE_1200')
-  }
-
-  // Nepali Times
-  if (url.includes('nepalitimes.com')) {
-    return url.replace(/\/cover\/\d+\//, '/cover/1200/')
   }
 
   return url
 }
 
 function extractBestImage(item: any): string | null {
-  // 1. media:thumbnail (BBC)
+  // 1. media:thumbnail (BBC - self closing with $ attributes)
   const mediaThumbnail = item.mediaThumbnail || item['media:thumbnail']
   if (mediaThumbnail) {
     if (Array.isArray(mediaThumbnail)) {
@@ -433,10 +450,10 @@ function extractBestImage(item: any): string | null {
           (parseInt(b?.$?.width) || 0) - (parseInt(a?.$?.width) || 0)
         )
       const url = sorted[0]?.$?.url
-      if (url && isValidImageUrl(url)) return upgradeImageUrl(url)
+      if (url && isValidImageUrl(url)) return url
     }
     const url = mediaThumbnail?.$?.url || mediaThumbnail?.url || mediaThumbnail
-    if (typeof url === 'string' && isValidImageUrl(url)) return upgradeImageUrl(url)
+    if (typeof url === 'string' && isValidImageUrl(url)) return url
   }
 
   // 2. media:content (Al Jazeera, others)
@@ -447,29 +464,45 @@ function extractBestImage(item: any): string | null {
         m?.$?.medium === 'image' || m?.$?.type?.startsWith('image/')
       )
       const url = imgs[0]?.$?.url || mediaContent[0]?.$?.url
-      if (url && isValidImageUrl(url)) return upgradeImageUrl(url)
+      if (url && isValidImageUrl(url)) return url
     }
     const url = mediaContent?.$?.url || mediaContent?.url || mediaContent
-    if (typeof url === 'string' && isValidImageUrl(url)) return upgradeImageUrl(url)
+    if (typeof url === 'string' && isValidImageUrl(url)) return url
   }
 
   // 3. enclosure - image type only
   if (item.enclosure?.url && item.enclosure?.type?.startsWith('image/')) {
-    if (isValidImageUrl(item.enclosure.url)) return upgradeImageUrl(item.enclosure.url)
+    if (isValidImageUrl(item.enclosure.url)) return item.enclosure.url
   }
 
-  // 4. content:encoded (WordPress - OnlineKhabar, Kathmandu Post)
+  // 4. content:encoded (WordPress - OnlineKhabar, Kathmandu Post, etc.)
   const contentEncoded = item.contentEncoded || item['content:encoded'] || item.content || ''
   if (contentEncoded) {
+    // Try to get the largest srcset image first
+    const srcsetMatch = contentEncoded.match(/srcset=["']([^"']+)["']/i)
+    if (srcsetMatch) {
+      const srcset = srcsetMatch[1]
+      const entries = srcset.split(',')
+        .map((e: string) => e.trim().split(/\s+/))
+        .filter((e: string[]) => e.length >= 2)
+        .map((e: string[]) => ({ url: e[0], width: parseInt(e[1]) || 0 }))
+        .sort((a: { url: string; width: number }, b: { url: string; width: number }) => b.width - a.width)
+
+      if (entries[0]?.url && isValidImageUrl(entries[0].url)) {
+        return entries[0].url
+      }
+    }
+
+    // Fall back to first img src
     const match = contentEncoded.match(/<img[^>]+src=["']([^"']+)["']/i)
-    if (match?.[1] && isValidImageUrl(match[1])) return upgradeImageUrl(match[1])
+    if (match?.[1] && isValidImageUrl(match[1])) return match[1]
   }
 
   // 5. description HTML
   const descHtml = item.description || item.summary || ''
   if (descHtml) {
     const match = descHtml.match(/<img[^>]+src=["']([^"']+)["']/i)
-    if (match?.[1] && isValidImageUrl(match[1])) return upgradeImageUrl(match[1])
+    if (match?.[1] && isValidImageUrl(match[1])) return match[1]
   }
 
   return null
