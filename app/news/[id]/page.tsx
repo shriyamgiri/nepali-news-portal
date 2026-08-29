@@ -108,9 +108,9 @@ export default async function ArticlePage({ params }: { params: { id: string } }
           {article.image_url && (
             <ArticleImage
               src={article.image_url}
-              alt={title}
+              alt={article.nepali_title}
               category={category}
-              isBreaking={!!article.is_breaking}
+              isBreaking={article.is_breaking || false}
             />
           )}
 
@@ -136,7 +136,7 @@ export default async function ArticlePage({ params }: { params: { id: string } }
               <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-medium">
                 स्रोत: {source}
               </span>
-              {article.nepal_related && (
+              {(article as any).nepal_related && (
                 <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
                   🇳🇵 Nepal
                 </span>
@@ -169,7 +169,7 @@ export default async function ArticlePage({ params }: { params: { id: string } }
             {/* Actions */}
             <ArticleActions
               originalUrl={article.original_url}
-              title={title}
+              title={article.nepali_title}
               summary={summary}
             />
 
@@ -184,6 +184,6 @@ export default async function ArticlePage({ params }: { params: { id: string } }
       </main>
 
       <Footer />
-    </div >
+    </div>
   )
 }
