@@ -385,6 +385,13 @@ export async function POST() {
 
 function extractBestImage(item: any): string | null {
   // 1. media:content
+  // Debug: log what image fields are available
+  console.log(`🖼️ Image check for: ${item.title?.substring(0, 40)}`)
+  console.log(`  - mediaContent: ${JSON.stringify(item.mediaContent)?.substring(0, 100)}`)
+  console.log(`  - mediaThumbnail: ${JSON.stringify(item.mediaThumbnail)?.substring(0, 100)}`)
+  console.log(`  - enclosure: ${JSON.stringify(item.enclosure)?.substring(0, 100)}`)
+  console.log(`  - content length: ${item.content?.length || 0}`)
+  console.log(`  - description length: ${item.description?.length || 0}`)
   const mediaContent = item.mediaContent || item['media:content']
   if (mediaContent) {
     const url = mediaContent?.$?.url || mediaContent?.url || mediaContent
