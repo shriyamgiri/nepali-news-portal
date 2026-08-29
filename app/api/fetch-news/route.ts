@@ -19,7 +19,6 @@ export async function POST() {
   try {
     console.log('🚀 Smart fetch starting...')
 
-    // ── Load Editorial Config from DB ──
     const { data: configData } = await supabase
       .from('editorial_config')
       .select('config_key, config_value')
@@ -38,7 +37,6 @@ export async function POST() {
 
     console.log(`📋 Config: Nepal bonus=${NEPAL_BONUS}, Min score=${MIN_SCORE}, Keep threshold=${KEEP_THRESHOLD}`)
 
-    // ── Load Active Sources ──
     const { data: sources } = await supabase
       .from('sources')
       .select('*')
@@ -48,7 +46,6 @@ export async function POST() {
       return NextResponse.json({ message: 'No active sources' })
     }
 
-    // ── Load Trending Topics ──
     const { data: trendingTopics } = await supabase
       .from('trending_topics')
       .select('keyword, priority, source')
@@ -58,7 +55,6 @@ export async function POST() {
     const keywords = trendingTopics || []
     console.log(`📡 ${sources.length} sources | 🔥 ${keywords.length} trending keywords`)
 
-    // ── Load Active Sports Events ──
     const { data: sportsEvents } = await supabase
       .from('sports_events')
       .select('keywords, score_boost, event_name')
@@ -116,9 +112,11 @@ export async function POST() {
           }
         }
 
-        newScore += 10 // Base credibility
+        newScore += 10
 
-        const batchTime = article.batch_time ? new Date(article.batch_time).getTime() : Date.now()
+        const batchTime = article.batch_time
+          ? new Date(article.batch_time).getTime()
+          : Date.now()
         const ageMinutes = (Date.now() - batchTime) / 60000
         const decayFactor = Math.max(0.3, 1 - (ageMinutes / 120))
         newScore = Math.round(newScore * decayFactor)
@@ -179,7 +177,9 @@ export async function POST() {
           ),
         ]) as Awaited<ReturnType<typeof parser.parseURL>>
 
-        for (const item of feed.items || []) {
+        for (const rawItem of feed.items || []) {
+          const item = rawItem as any
+
           if (!item.link || !item.title) continue
 
           const text = (
@@ -214,7 +214,7 @@ export async function POST() {
             }
           }
 
-          // 4. Breaking News Detection
+          // 4. Breaking News
           const breakingWords = (
             config.breaking_keywords ||
             'breaking,urgent,alert,just in,developing,exclusive,flash'
@@ -240,7 +240,7 @@ export async function POST() {
             else if (ageHrs < 6) score += parseInt(config.recency_6hr_bonus || '2')
           }
 
-          // 7. Image extraction (enhanced - multiple methods)
+          // 7. Image extraction
           const imageUrl = extractBestImage(item)
           if (imageUrl) score += 2
 
@@ -287,10 +287,8 @@ export async function POST() {
 
     console.log(`📊 ${allArticles.length} total articles scored`)
 
-    // ── Deduplicate ──
     const deduplicated = deduplicateByTitle(allArticles)
 
-    // ── Filter already stored ──
     const urls = deduplicated.map(a => a.url)
     const { data: existing } = await supabase
       .from('articles')
@@ -300,7 +298,6 @@ export async function POST() {
     const existingUrls = new Set(existing?.map((e: any) => e.original_url) || [])
     const newArticles = deduplicated.filter(a => !existingUrls.has(a.url))
 
-    // ── Save TOP N ──
     const topArticles = newArticles
       .sort((a, b) => b.score - a.score)
       .slice(0, TOP_N)
@@ -320,7 +317,6 @@ export async function POST() {
         ? new Date(Date.now() + 90 * 60 * 1000).toISOString()
         : null
 
-      // Use placeholder only as last resort
       const finalImageUrl = article.imageUrl ||
         'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
 
@@ -388,7 +384,7 @@ export async function POST() {
 // ── Helper Functions ──
 
 function extractBestImage(item: any): string | null {
-  // 1. media:content (most common in news RSS)
+  // 1. media:content
   const mediaContent = item.mediaContent || item['media:content']
   if (mediaContent) {
     const url = mediaContent?.$?.url || mediaContent?.url || mediaContent
@@ -402,20 +398,20 @@ function extractBestImage(item: any): string | null {
     if (typeof url === 'string' && isValidImageUrl(url)) return url
   }
 
-  // 3. enclosure (image type)
+  // 3. enclosure
   if (item.enclosure?.url) {
     const url = item.enclosure.url
     if (isValidImageUrl(url) && url.match(/\.(jpg|jpeg|png|webp|gif)/i)) return url
   }
 
-  // 4. Extract <img> from content HTML
+  // 4. img tag from content
   const contentHtml = item.content || item['content:encoded'] || ''
   if (contentHtml) {
     const match = contentHtml.match(/<img[^>]+src=["']([^"']+)["']/i)
     if (match?.[1] && isValidImageUrl(match[1])) return match[1]
   }
 
-  // 5. Extract <img> from description
+  // 5. img tag from description
   const descHtml = item.description || item.summary || ''
   if (descHtml) {
     const match = descHtml.match(/<img[^>]+src=["']([^"']+)["']/i)
@@ -455,7 +451,7 @@ function deduplicateByTitle(articles: any[]): any[] {
 function determineCategory(item: any, source: any): string {
   const t = (
     (item.title || '') + ' ' +
-    (item.contentSnippet || '')
+    (item.contentSnippet || item.description || '')
   ).toLowerCase()
 
   if (t.match(/election|government|parliament|minister|politics|party/)) return 'politics'
