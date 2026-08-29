@@ -240,14 +240,6 @@ export default function ArticlesManagement() {
                 )}
               </span>
             )}
-            {prevBatch ? (
-              <span className="text-amber-700">
-                Previous batch ({formatBatchTime(prevBatch.batch_time)}) —{' '}
-                {counts.backlog} articles in backlog, will be compared and cleaned on next run
-              </span>
-            ) : (
-              <span className="text-amber-700">No previous batch backlog</span>
-            )}
           </div>
           {counts.backlog > 0 && (
             <span className="bg-amber-600 text-white text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">
