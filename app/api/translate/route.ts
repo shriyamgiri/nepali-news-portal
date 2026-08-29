@@ -4,12 +4,12 @@ import { NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
-const genAI         = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!)
 const MODEL_PRIMARY = 'gemini-2.5-flash'
-const MODEL_BACKUP  = 'gemini-2.5-flash-lite'
-const BATCH_SIZE    = 3
-const DELAY_MS      = 200
-const TIMEOUT_MS    = 15000 // 15 seconds per article max
+const MODEL_BACKUP = 'gemini-2.5-flash-lite'
+const BATCH_SIZE = 3
+const DELAY_MS = 200
+const TIMEOUT_MS = 15000
 
 export async function POST() {
   try {
@@ -20,13 +20,15 @@ export async function POST() {
       .eq('status', 'translating')
       .lt('updated_at', new Date(Date.now() - 10 * 60 * 1000).toISOString())
 
-    // Get articles to translate
+    // ── Get TOP articles by priority_score ──
+    // This picks best from BOTH current and previous batch combined
     const { data: articles, error } = await supabase
       .from('articles')
       .select('*')
       .eq('status', 'fetched')
       .is('nepali_title', null)
-      .order('published_at', { ascending: false })
+      .order('priority_score', { ascending: false }) // ← Highest score first
+      .order('published_at', { ascending: false }) // ← Then newest
       .limit(BATCH_SIZE)
 
     if (error) throw new Error(`DB error: ${error.message}`)
@@ -39,11 +41,14 @@ export async function POST() {
       })
     }
 
-    console.log(`📝 Translating ${articles.length} articles...`)
+    console.log(`📝 Translating TOP ${articles.length} articles by priority score...`)
+    articles.forEach((a, i) => {
+      console.log(`  ${i + 1}. [Score: ${a.priority_score}] ${a.original_title?.substring(0, 50)}`)
+    })
 
     let successCount = 0
-    let failCount    = 0
-    const results    = []
+    let failCount = 0
+    const results = []
 
     for (const article of articles) {
       const start = Date.now()
@@ -56,7 +61,7 @@ export async function POST() {
           .update({ status: 'translating', updated_at: new Date().toISOString() })
           .eq('id', article.id)
 
-        // ✅ Add 15 second timeout per article
+        // 15 second timeout per article
         const translated = await Promise.race([
           translateWithFallback(
             article.original_title || '',
@@ -74,50 +79,59 @@ export async function POST() {
         const { error: updateError } = await supabase
           .from('articles')
           .update({
-            nepali_title:   translated.title,
+            nepali_title: translated.title,
             nepali_summary: translated.summary,
             nepali_content: translated.content,
-            status:         'published',
-            translated_at:  new Date().toISOString(),
-            updated_at:     new Date().toISOString(),
+            status: 'published',
+            translated_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
           })
           .eq('id', article.id)
 
         if (updateError) throw new Error(`DB update failed: ${updateError.message}`)
 
         await supabase.from('translation_logs').insert({
-          article_id:              article.id,
-          model_used:              MODEL_PRIMARY,
-          source_language:         article.original_language || 'en',
-          target_language:         'ne',
-          status:                  'success',
+          article_id: article.id,
+          model_used: MODEL_PRIMARY,
+          source_language: article.original_language || 'en',
+          target_language: 'ne',
+          status: 'success',
           translation_duration_ms: Date.now() - start,
         })
 
         successCount++
-        console.log(`  ✅ Done (${Date.now() - start}ms)`)
-        results.push({ id: article.id, status: 'success', duration: `${Date.now() - start}ms` })
+        console.log(`  ✅ Done (${Date.now() - start}ms) [Score: ${article.priority_score}]`)
+        results.push({
+          id: article.id,
+          status: 'success',
+          score: article.priority_score,
+          duration: `${Date.now() - start}ms`,
+        })
 
       } catch (err: any) {
         failCount++
         console.error(`  ❌ ${err.message}`)
 
-        // Reset article back to fetched for retry
+        // Reset back to fetched for retry
         await supabase
           .from('articles')
           .update({ status: 'fetched', updated_at: new Date().toISOString() })
           .eq('id', article.id)
 
         await supabase.from('translation_logs').insert({
-          article_id:      article.id,
-          model_used:      MODEL_PRIMARY,
+          article_id: article.id,
+          model_used: MODEL_PRIMARY,
           source_language: article.original_language || 'en',
           target_language: 'ne',
-          status:          'failed',
-          error_message:   err.message,
+          status: 'failed',
+          error_message: err.message,
         })
 
-        results.push({ id: article.id, status: 'failed', error: err.message })
+        results.push({
+          id: article.id,
+          status: 'failed',
+          error: err.message,
+        })
       }
 
       await sleep(DELAY_MS)
@@ -126,9 +140,9 @@ export async function POST() {
     return NextResponse.json({
       success: true,
       summary: {
-        total:      articles.length,
+        total: articles.length,
         successful: successCount,
-        failed:     failCount,
+        failed: failCount,
       },
       results,
     })
@@ -158,11 +172,9 @@ async function callModel(
   title: string,
   summary: string,
   content: string,
-  retries = 1  // Reduced from 2 to 1
+  retries = 1
 ) {
   const model = genAI.getGenerativeModel({ model: modelName })
-
-  // ✅ Use only summary or short content to stay within timeout
   const source = summary || content.substring(0, 300)
 
   const prompt = `You are a professional Nepali news journalist. Translate this article to formal Nepali.
@@ -182,11 +194,10 @@ Reply ONLY with JSON (no markdown):
   for (let attempt = 1; attempt <= retries + 1; attempt++) {
     try {
       const result = await model.generateContent(prompt)
-      const text   = result.response.text()
+      const text = result.response.text()
       return parseJSON(text)
     } catch (e: any) {
       if (attempt > retries) throw e
-      // Short wait on retry
       await sleep(attempt * 3000)
     }
   }
@@ -206,7 +217,7 @@ function parseJSON(text: string) {
   if (!p.title) throw new Error('No title in response')
 
   return {
-    title:   p.title,
+    title: p.title,
     summary: p.summary || '',
     content: p.content || p.summary || '',
   }

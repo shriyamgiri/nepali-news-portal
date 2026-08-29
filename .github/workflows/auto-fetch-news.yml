@@ -1,9 +1,9 @@
-name: GN Nepal - Auto Fetch & Publish
+name: GN Nepal - Smart News Pipeline
 
 on:
   schedule:
-    - cron: '*/30 * * * *'  # Every 30 minutes
-  workflow_dispatch:          # Manual trigger from GitHub UI
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
 
 jobs:
   pipeline:
@@ -11,56 +11,91 @@ jobs:
     timeout-minutes: 10
 
     steps:
-
-      # ── Step 1: Keep Supabase alive (prevents free tier pause) ──
-      - name: 🏓 Keep DB Alive
+      # ── Step 1: Fetch new articles + Re-score previous batch ──
+      - name: 📰 Step 1 - Fetch & Score
         run: |
-          echo "Pinging health check..."
-          curl -s "${{ secrets.SITE_URL }}/api/health" | head -c 200
-          echo ""
-
-      # ── Step 2: Auto-detect trending topics ──
-      - name: 🔥 Detect Trending Topics
-        run: |
-          echo "Detecting trending topics from Google Trends..."
-          curl -s -X POST \
+          echo "🚀 Starting GN Nepal pipeline at $(date)"
+          echo "Step 1: Fetching new articles and re-scoring previous batch..."
+          
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.SITE_URL }}/api/trending/auto" | head -c 300
-          echo ""
+            "${{ secrets.SITE_URL }}/api/fetch-news")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "⚠️ Fetch returned $HTTP_STATUS"
+          else
+            echo "✅ Fetch completed successfully"
+          fi
 
-      # ── Step 3: Smart fetch news ──
-      - name: 📰 Fetch News
+      # ── Delay between fetch and translate ──
+      - name: ⏳ Delay 5 seconds
         run: |
-          echo "Fetching trending news from all sources..."
-          curl -s -X POST \
+          echo "Waiting for DB writes to complete..."
+          sleep 5
+
+      # ── Step 2: Translate TOP 3 by priority score ──
+      - name: 🌐 Step 2 - Translate Best Articles
+        run: |
+          echo "Step 2: Translating top priority articles..."
+          
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.SITE_URL }}/api/fetch-news" | head -c 300
-          echo ""
+            "${{ secrets.SITE_URL }}/api/translate")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "❌ Translation failed with $HTTP_STATUS"
+            exit 1
+          else
+            echo "✅ Translation completed successfully"
+          fi
 
-      # ── Step 4: Translate to Nepali ──
-      - name: 🌐 Translate to Nepali
+      # ── Delay between translate and cleanup ──
+      - name: ⏳ Delay 3 seconds
         run: |
-          echo "Translating articles to Nepali..."
-          curl -s -X POST \
+          echo "Waiting for translations to save..."
+          sleep 3
+
+      # ── Step 3: Cleanup previous batch ──
+      - name: 🧹 Step 3 - Cleanup Previous Batch
+        run: |
+          echo "Step 3: Cleaning up previous batch unpublished articles..."
+          
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST \
             -H "Content-Type: application/json" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.SITE_URL }}/api/translate" | head -c 300
-          echo ""
+            "${{ secrets.SITE_URL }}/api/cleanup")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          echo "✅ Cleanup completed"
 
-      # ── Step 5: Post to Facebook ──
-      - name: 📘 Post to Facebook
-        run: |
-          echo "Posting to Facebook page..."
-          curl -s -X POST \
-            -H "Content-Type: application/json" \
-            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
-            "${{ secrets.SITE_URL }}/api/facebook/post" | head -c 300
-          echo ""
-
-      # ── Step 6: Confirm pipeline done ──
+      # ── Pipeline Summary ──
       - name: ✅ Pipeline Complete
         run: |
-          echo "GN Nepal pipeline completed successfully!"
-          echo "Time: $(date)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ GN Nepal pipeline complete!"
+          echo "📰 Fresh Nepali news published"
+          echo "🧹 Old batch cleaned up"
+          echo "⏰ Time: $(date)"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

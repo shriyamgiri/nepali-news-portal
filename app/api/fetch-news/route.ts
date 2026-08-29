@@ -21,13 +21,14 @@ export async function POST() {
     })
 
     // Config values (with fallbacks)
-    const NEPAL_BONUS     = parseInt(config.nepal_keyword_bonus || '40')
-    const MIN_SCORE       = parseInt(config.min_score_to_save || '3')
-    const TOP_N           = parseInt(config.translate_batch_size || '10')
-    const NEPAL_KEYWORDS  = (config.nepal_keywords || 'nepal,kathmandu,nepali,himalaya,pokhara')
+    const NEPAL_BONUS = parseInt(config.nepal_keyword_bonus || '40')
+    const MIN_SCORE = parseInt(config.min_score_to_save || '3')
+    const TOP_N = parseInt(config.batch_size || '10')
+    const NEPAL_KEYWORDS = (config.nepal_keywords || 'nepal,kathmandu,nepali,himalaya,pokhara')
       .split(',').map((k: string) => k.trim().toLowerCase())
+    const KEEP_THRESHOLD = parseInt(config.batch_keep_score_threshold || '70')
 
-    console.log(`📋 Config loaded: Nepal bonus=${NEPAL_BONUS}, Min score=${MIN_SCORE}`)
+    console.log(`📋 Config: Nepal bonus=${NEPAL_BONUS}, Min score=${MIN_SCORE}, Keep threshold=${KEEP_THRESHOLD}`)
 
     // ── Load Active Sources ──
     const { data: sources } = await supabase
@@ -67,6 +68,82 @@ export async function POST() {
     })
 
     console.log(`⚽ ${sportKeywords.length} sport keywords active`)
+
+    // ══════════════════════════════════════════
+    // PHASE 1: RE-SCORE PREVIOUS BATCH BACKLOG
+    // ══════════════════════════════════════════
+    console.log('\n📦 Phase 1: Re-scoring previous batch backlog...')
+
+    // Get all current fetched articles (previous batch backlog)
+    const { data: previousBacklog } = await supabase
+      .from('articles')
+      .select('id, original_title, original_content, original_summary, priority_score, batch_id, batch_time')
+      .eq('status', 'fetched')
+      .not('batch_id', 'is', null)
+
+    if (previousBacklog?.length) {
+      console.log(`🔄 Re-scoring ${previousBacklog.length} backlog articles with current trends...`)
+
+      for (const article of previousBacklog) {
+        const text = (
+          (article.original_title || '') + ' ' +
+          (article.original_content || '') + ' ' +
+          (article.original_summary || '')
+        ).toLowerCase()
+
+        let newScore = 0
+
+        // Re-score with current trending keywords
+        for (const kw of keywords) {
+          if (text.includes(kw.keyword.toLowerCase())) {
+            newScore += kw.priority || 5
+          }
+        }
+
+        // Nepal bonus
+        const isNepal = NEPAL_KEYWORDS.some(kw => text.includes(kw))
+        if (isNepal) newScore += NEPAL_BONUS
+
+        // Sports boost
+        for (const sport of sportKeywords) {
+          if (text.includes(sport.keyword)) {
+            newScore += sport.boost
+            break
+          }
+        }
+
+        // Source credibility
+        newScore += 10 // Base credibility
+
+        // ── Time Decay ──
+        // Older articles get progressively lower scores
+        const batchTime = article.batch_time ? new Date(article.batch_time).getTime() : Date.now()
+        const ageMinutes = (Date.now() - batchTime) / 60000
+        const decayFactor = Math.max(0.3, 1 - (ageMinutes / 120)) // Minimum 30% of score
+        newScore = Math.round(newScore * decayFactor)
+
+        // Minimum score
+        if (newScore < MIN_SCORE) newScore = MIN_SCORE
+
+        // Update score in DB
+        await supabase
+          .from('articles')
+          .update({ priority_score: newScore })
+          .eq('id', article.id)
+      }
+
+      console.log('✅ Previous batch re-scored with time decay applied')
+    } else {
+      console.log('ℹ️ No previous batch backlog found')
+    }
+
+    // ══════════════════════════════════════════
+    // PHASE 2: FETCH NEW ARTICLES FROM SOURCES
+    // ══════════════════════════════════════════
+    console.log('\n📰 Phase 2: Fetching new articles from sources...')
+
+    const currentBatchId = new Date().toISOString()
+    const currentBatchTime = new Date().toISOString()
 
     interface ScoredArticle {
       title: string
@@ -115,7 +192,7 @@ export async function POST() {
           let score = 0
           const matchedKeywords: string[] = []
 
-          // ── 1. Trending Keywords Score ──
+          // 1. Trending Keywords Score
           for (const kw of keywords) {
             if (text.includes(kw.keyword.toLowerCase())) {
               score += kw.priority || 5
@@ -123,23 +200,23 @@ export async function POST() {
             }
           }
 
-          // ── 2. Nepal Relevance Score ──
+          // 2. Nepal Relevance Score
           const isNepalRelated = NEPAL_KEYWORDS.some(kw => text.includes(kw))
           if (isNepalRelated) {
             score += NEPAL_BONUS
             matchedKeywords.push('🇳🇵 Nepal')
           }
 
-          // ── 3. Sports Events Score ──
+          // 3. Sports Events Score
           for (const sport of sportKeywords) {
             if (text.includes(sport.keyword)) {
               score += sport.boost
               matchedKeywords.push(`⚽ ${sport.event}`)
-              break // One sport boost per article
+              break
             }
           }
 
-          // ── 4. Breaking News Detection ──
+          // 4. Breaking News Detection
           const breakingWords = (
             config.breaking_keywords ||
             'breaking,urgent,alert,just in,developing,exclusive,flash'
@@ -151,43 +228,43 @@ export async function POST() {
             matchedKeywords.push('🔴 Breaking')
           }
 
-          // ── 5. Source Credibility Score ──
-          const credibilityBoost = (source.credibility_score || 5) * 
+          // 5. Source Credibility Score
+          const credibilityBoost = (source.credibility_score || 5) *
             parseInt(config.source_credibility_multiplier || '2')
           score += credibilityBoost
 
-          // ── 6. Recency Score ──
+          // 6. Recency Score
           if (item.pubDate) {
             const ageHrs = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
-            if (ageHrs < 0.5)     score += parseInt(config.recency_30min_bonus || '10')
-            else if (ageHrs < 1)  score += parseInt(config.recency_1hr_bonus || '8')
-            else if (ageHrs < 3)  score += parseInt(config.recency_3hr_bonus || '5')
-            else if (ageHrs < 6)  score += parseInt(config.recency_6hr_bonus || '2')
+            if (ageHrs < 0.5) score += parseInt(config.recency_30min_bonus || '10')
+            else if (ageHrs < 1) score += parseInt(config.recency_1hr_bonus || '8')
+            else if (ageHrs < 3) score += parseInt(config.recency_3hr_bonus || '5')
+            else if (ageHrs < 6) score += parseInt(config.recency_6hr_bonus || '2')
           }
 
-          // ── 7. Image Bonus ──
+          // 7. Image Bonus
           const imageUrl = extractImageUrl(item.content || item.description || '')
           if (imageUrl || item.enclosure?.url) score += 2
 
-          // ── Never skip - minimum score ──
+          // Never skip - minimum score
           if (score < MIN_SCORE) score = MIN_SCORE
 
           allArticles.push({
-            title:           item.title,
-            content:         item.content || item.contentSnippet || item.description || '',
-            summary:         item.contentSnippet || item.description || '',
-            url:             item.link,
-            imageUrl:        imageUrl || item.enclosure?.url || null,
-            author:          item.creator || item.author || null,
-            publishedAt:     item.pubDate || item.isoDate || new Date().toISOString(),
-            sourceId:        source.id,
-            sourceName:      source.name,
-            language:        source.language || 'en',
-            category:        determineCategory(item, source),
+            title: item.title,
+            content: item.content || item.contentSnippet || item.description || '',
+            summary: item.contentSnippet || item.description || '',
+            url: item.link,
+            imageUrl: imageUrl || item.enclosure?.url || null,
+            author: item.creator || item.author || null,
+            publishedAt: item.pubDate || item.isoDate || new Date().toISOString(),
+            sourceId: source.id,
+            sourceName: source.name,
+            language: source.language || 'en',
+            category: determineCategory(item, source),
             score,
             matchedKeywords,
             isBreaking,
-            nepalRelated:    isNepalRelated,
+            nepalRelated: isNepalRelated,
           })
         }
 
@@ -200,14 +277,14 @@ export async function POST() {
       } catch (err: any) {
         console.error(`⚠️ ${source.name}: ${err.message}`)
         await supabase.from('fetch_logs').insert({
-          source_id:         source.id,
-          status:            'failed',
-          error_message:     err.message,
-          articles_found:    0,
-          articles_new:      0,
+          source_id: source.id,
+          status: 'failed',
+          error_message: err.message,
+          articles_found: 0,
+          articles_new: 0,
           articles_duplicate: 0,
-          started_at:        new Date().toISOString(),
-          completed_at:      new Date().toISOString(),
+          started_at: new Date().toISOString(),
+          completed_at: new Date().toISOString(),
         })
       }
     }
@@ -227,12 +304,12 @@ export async function POST() {
     const existingUrls = new Set(existing?.map((e: any) => e.original_url) || [])
     const newArticles = deduplicated.filter(a => !existingUrls.has(a.url))
 
-    // ── Save top N by score ──
+    // ── Save TOP N new articles with current batch_id ──
     const topArticles = newArticles
       .sort((a, b) => b.score - a.score)
       .slice(0, TOP_N)
 
-    console.log(`⭐ Saving top ${topArticles.length} articles`)
+    console.log(`⭐ Saving top ${topArticles.length} new articles with batch_id: ${currentBatchId}`)
 
     let savedCount = 0
 
@@ -243,31 +320,32 @@ export async function POST() {
         .eq('slug', article.category)
         .single()
 
-      // Breaking news expiry
       const breakingExpiresAt = article.isBreaking
         ? new Date(Date.now() + 90 * 60 * 1000).toISOString()
         : null
 
       const { error } = await supabase.from('articles').insert({
-        source_id:           article.sourceId,
-        category_id:         category?.id || null,
-        original_title:      article.title,
-        original_content:    article.content,
-        original_summary:    article.summary,
-        original_language:   article.language,
-        original_url:        article.url,
-        image_url:           article.imageUrl ||
+        source_id: article.sourceId,
+        category_id: category?.id || null,
+        original_title: article.title,
+        original_content: article.content,
+        original_summary: article.summary,
+        original_language: article.language,
+        original_url: article.url,
+        image_url: article.imageUrl ||
           'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800',
-        author:              article.author,
-        published_at:        article.publishedAt,
-        status:              'fetched',
-        priority_score:      article.score,
-        is_breaking:         article.isBreaking,
+        author: article.author,
+        published_at: article.publishedAt,
+        status: 'fetched',
+        priority_score: article.score,
+        is_breaking: article.isBreaking,
         breaking_expires_at: breakingExpiresAt,
-        nepal_related:       article.nepalRelated,
-        view_count:          0,
-        like_count:          0,
-        comment_count:       0,
+        nepal_related: article.nepalRelated,
+        batch_id: currentBatchId,   // ← Batch tracking
+        batch_time: currentBatchTime, // ← Batch tracking
+        view_count: 0,
+        like_count: 0,
+        comment_count: 0,
       })
 
       if (!error) {
@@ -280,22 +358,24 @@ export async function POST() {
 
     // ── Log fetch results ──
     await supabase.from('fetch_logs').insert({
-      status:             'success',
-      articles_found:     allArticles.length,
-      articles_new:       savedCount,
+      status: 'success',
+      articles_found: allArticles.length,
+      articles_new: savedCount,
       articles_duplicate: newArticles.length - savedCount,
-      started_at:         new Date().toISOString(),
-      completed_at:       new Date().toISOString(),
+      started_at: new Date().toISOString(),
+      completed_at: new Date().toISOString(),
     })
 
     return NextResponse.json({
       success: true,
       summary: {
-        sources_scanned:   sources.length,
-        total_scored:      allArticles.length,
-        new_stories:       newArticles.length,
-        saved:             savedCount,
-        nepal_bonus_used:  NEPAL_BONUS,
+        sources_scanned: sources.length,
+        total_scored: allArticles.length,
+        new_stories: newArticles.length,
+        saved: savedCount,
+        backlog_rescored: previousBacklog?.length || 0,
+        batch_id: currentBatchId,
+        nepal_bonus_used: NEPAL_BONUS,
         sport_events_active: sportsEvents?.length || 0,
       },
     })
@@ -310,7 +390,7 @@ export async function POST() {
 
 function deduplicateByTitle(articles: any[]): any[] {
   const sorted = [...articles].sort((a, b) => b.score - a.score)
-  const seen   = new Set<string>()
+  const seen = new Set<string>()
   const result = []
   for (const a of sorted) {
     const fp = a.title.toLowerCase()
@@ -335,11 +415,11 @@ function determineCategory(item: any, source: any): string {
   ).toLowerCase()
 
   if (t.match(/election|government|parliament|minister|politics|party/)) return 'politics'
-  if (t.match(/economy|business|trade|market|stock|bank|finance/))       return 'economy'
+  if (t.match(/economy|business|trade|market|stock|bank|finance/)) return 'economy'
   if (t.match(/sport|football|cricket|ipl|game|player|match|champion/)) return 'sports'
-  if (t.match(/tech|technology|internet|software|app|digital|ai/))       return 'tech'
-  if (t.match(/health|medical|disease|hospital|doctor|covid/))           return 'health'
-  if (t.match(/entertainment|movie|music|celebrity|film|actor/))         return 'entertainment'
+  if (t.match(/tech|technology|internet|software|app|digital|ai/)) return 'tech'
+  if (t.match(/health|medical|disease|hospital|doctor|covid/)) return 'health'
+  if (t.match(/entertainment|movie|music|celebrity|film|actor/)) return 'entertainment'
   return source.category?.toLowerCase() || 'world'
 }
 
