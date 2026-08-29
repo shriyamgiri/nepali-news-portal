@@ -145,10 +145,18 @@ export default async function Home() {
 
 function getRelativeTime(timestamp: string | null): string {
   if (!timestamp) return 'हालै'
-  const diffMs = Date.now() - new Date(timestamp).getTime()
+
+  // Add Z to treat as UTC (translated_at stored without timezone)
+  const utcStr = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z'
+  const then = new Date(utcStr)
+  const now = new Date()
+
+  const diffMs = now.getTime() - then.getTime()
   const diffMins = Math.floor(diffMs / 60000)
   const diffHours = Math.floor(diffMins / 60)
   const diffDays = Math.floor(diffHours / 24)
+
+  if (diffMins < 1) return 'भर्खरै'
   if (diffMins < 60) return `${diffMins} मिनेट अघि`
   if (diffHours < 24) return `${diffHours} घण्टा अघि`
   return `${diffDays} दिन अघि`

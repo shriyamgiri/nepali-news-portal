@@ -65,25 +65,41 @@ const STATUS_OPTIONS = [
 
 function formatNPT(dateStr: string | null): string {
   if (!dateStr) return '—'
-  const date = new Date(new Date(dateStr).toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
+
+  // translated_at is stored as UTC but without timezone suffix
+  // We need to add Z to treat it as UTC then convert to NPT
+  const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z'
+  const date = new Date(utcStr)
+
+  // Convert to Nepal time manually (UTC+5:45)
+  const nepalOffset = 5 * 60 + 45 // 345 minutes
+  const nepalTime = new Date(date.getTime() + nepalOffset * 60 * 1000)
+
   const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-  const day = date.getDate().toString().padStart(2, '0')
-  const month = months[date.getMonth()]
-  const year = date.getFullYear()
-  const hours = date.getHours()
-  const mins = date.getMinutes().toString().padStart(2, '0')
+  const day = nepalTime.getUTCDate().toString().padStart(2, '0')
+  const month = months[nepalTime.getUTCMonth()]
+  const year = nepalTime.getUTCFullYear()
+  const hours = nepalTime.getUTCHours()
+  const mins = nepalTime.getUTCMinutes().toString().padStart(2, '0')
   const ampm = hours >= 12 ? 'PM' : 'AM'
   const h12 = (hours % 12 || 12).toString().padStart(2, '0')
+
   return `${day}-${month}-${year}, ${h12}:${mins} ${ampm} NPT`
 }
 
 function formatBatchTime(dateStr: string | null): string {
   if (!dateStr) return '—'
-  const date = new Date(new Date(dateStr).toLocaleString('en-US', { timeZone: 'Asia/Kathmandu' }))
-  const hours = date.getHours()
-  const mins = date.getMinutes().toString().padStart(2, '0')
+
+  const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z'
+  const date = new Date(utcStr)
+  const nepalOffset = 5 * 60 + 45
+  const nepalTime = new Date(date.getTime() + nepalOffset * 60 * 1000)
+
+  const hours = nepalTime.getUTCHours()
+  const mins = nepalTime.getUTCMinutes().toString().padStart(2, '0')
   const ampm = hours >= 12 ? 'PM' : 'AM'
   const h12 = hours % 12 || 12
+
   return `${h12}:${mins} ${ampm}`
 }
 
@@ -240,6 +256,7 @@ export default function ArticlesManagement() {
                 )}
               </span>
             )}
+            
           </div>
           {counts.backlog > 0 && (
             <span className="bg-amber-600 text-white text-xs px-2.5 py-1 rounded-full font-medium whitespace-nowrap">
