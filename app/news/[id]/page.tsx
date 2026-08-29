@@ -1,10 +1,15 @@
-import { supabase } from '@/app/lib/supabase'
-import Header from '@/app/components/Header'
-import Footer from '@/app/components/Footer'
+export const dynamic = 'force-dynamic'
+
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
+import { ArrowLeft, Clock, Eye } from 'lucide-react'
+import { getArticleById } from '@/app/lib/database'
+import Header from '@/app/components/Header'
+import Footer from '@/app/components/Footer'
+import ArticleImage from '@/app/components/ArticleImage'
+import ArticleActions from '@/app/components/ArticleActions'
 
-export const dynamic = 'force-dynamic'
+const SITE_URL = 'https://nepali-news-portal-wheat.vercel.app'
 
 export async function generateMetadata({ params }: { params: { id: string } }) {
   const article = await getArticleById(params.id)
@@ -13,9 +18,9 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
     return { title: 'Article Not Found | GN Nepal' }
   }
 
-  const title       = article.nepali_title || article.original_title
+  const title = article.nepali_title || article.original_title
   const description = article.nepali_summary || article.original_summary || ''
-  const image       = article.image_url || 'https://nepali-news-portal-wheat.vercel.app/og-image.jpg'
+  const image = article.image_url || `${SITE_URL}/og-image.jpg`
 
   return {
     title,
@@ -23,147 +28,162 @@ export async function generateMetadata({ params }: { params: { id: string } }) {
     openGraph: {
       title,
       description,
-      images:   [{ url: image, width: 1200, height: 630 }],
-      type:     'article',
-      locale:   'ne_NP',
+      images: [{ url: image, width: 1200, height: 630 }],
+      type: 'article',
+      locale: 'ne_NP',
       siteName: 'GN Nepal',
     },
     twitter: {
-      card:        'summary_large_image',
+      card: 'summary_large_image',
       title,
       description,
-      images:      [image],
+      images: [image],
     },
   }
 }
 
-export default async function NewsArticle({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+function getRelativeTime(timestamp: string | null): string {
+  if (!timestamp) return 'हालै'
+  const utcStr = timestamp.endsWith('Z') ? timestamp : timestamp + 'Z'
+  const then = new Date(utcStr)
+  const now = new Date()
+  const diffMs = now.getTime() - then.getTime()
+  const diffMins = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMins / 60)
+  const diffDays = Math.floor(diffHours / 24)
+  if (diffMins < 1) return 'भर्खरै'
+  if (diffMins < 60) return `${diffMins} मिनेट अघि`
+  if (diffHours < 24) return `${diffHours} घण्टा अघि`
+  return `${diffDays} दिन अघि`
+}
 
-  // Fetch article from database
-  const { data: article, error } = await supabase
-    .from('articles')
-    .select(`
-      *,
-      categories (
-        name_en,
-        name_ne,
-        slug,
-        icon
-      ),
-      sources (
-        name,
-        website_url
-      )
-    `)
-    .eq('id', id)
-    .single()
+function formatNPT(dateStr: string | null): string {
+  if (!dateStr) return '—'
+  const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z'
+  const date = new Date(utcStr)
+  const nepalOffset = 5 * 60 + 45
+  const nepalTime = new Date(date.getTime() + nepalOffset * 60 * 1000)
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+  const day = nepalTime.getUTCDate().toString().padStart(2, '0')
+  const month = months[nepalTime.getUTCMonth()]
+  const year = nepalTime.getUTCFullYear()
+  const hours = nepalTime.getUTCHours()
+  const mins = nepalTime.getUTCMinutes().toString().padStart(2, '0')
+  const ampm = hours >= 12 ? 'PM' : 'AM'
+  const h12 = (hours % 12 || 12).toString().padStart(2, '0')
+  return `${day}-${month}-${year}, ${h12}:${mins} ${ampm} NPT`
+}
 
-  if (error || !article) {
+export default async function ArticlePage({ params }: { params: { id: string } }) {
+  const article = await getArticleById(params.id)
+
+  if (!article) {
     notFound()
   }
 
-  // Increment view count
-  await supabase
-    .from('articles')
-    .update({ view_count: (article.view_count || 0) + 1 })
-    .eq('id', id)
+  const title = article.nepali_title || article.original_title
+  const summary = article.nepali_summary || article.original_summary || ''
+  const content = article.nepali_content || article.original_content || ''
+  const source = (article as any).sources?.name || 'Unknown'
+  const category = (article as any).categories?.name_ne || 'समाचार'
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
 
-      <main className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <article className="bg-white rounded-xl shadow-sm p-6 md:p-8 border border-gray-100">
-            {/* Category Badge */}
-            <Link 
-              href={`/${article.categories?.slug || 'news'}`}
-              className="inline-block px-3 py-1 bg-nepal-red text-white text-sm font-medium rounded-full mb-4 nepali-text hover:bg-nepal-red/90 transition"
-            >
-              {article.categories?.name_ne || 'समाचार'}
-            </Link>
+      <main className="container mx-auto px-4 py-8 max-w-4xl">
+
+        {/* Back Button */}
+        <Link
+          href="/"
+          className="inline-flex items-center gap-2 text-gray-600 hover:text-nepal-blue transition mb-6 group"
+        >
+          <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
+          <span className="text-sm nepali-text">गृहपृष्ठमा फर्कनुहोस्</span>
+        </Link>
+
+        <article className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
+
+          {/* Hero Image */}
+          {article.image_url && (
+            <ArticleImage
+              src={article.image_url}
+              alt={title}
+              category={category}
+              isBreaking={!!article.is_breaking}
+            />
+          )}
+
+          <div className="p-6 md:p-8">
 
             {/* Title */}
-            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-4 nepali-text">
-              {article.nepali_title || article.original_title}
+            <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-snug mb-4 nepali-text">
+              {title}
             </h1>
 
             {/* Meta Info */}
-            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-600 mb-6 pb-6 border-b border-gray-200">
-              <span>
-                📅 {new Date(article.published_at || article.created_at).toLocaleDateString('ne-NP')}
+            <div className="flex flex-wrap items-center gap-4 text-sm text-gray-500 pb-4 mb-6 border-b border-gray-100">
+              <span className="flex items-center gap-1.5">
+                <Clock className="w-4 h-4" />
+                <span className="nepali-text">
+                  {getRelativeTime(article.translated_at || article.published_at)}
+                </span>
               </span>
-              <span>
-                👁 {article.view_count || 0} पटक पढिएको
+              <span className="flex items-center gap-1.5">
+                <Eye className="w-4 h-4" />
+                {article.view_count} views
+              </span>
+              <span className="bg-gray-100 px-3 py-1 rounded-full text-xs font-medium">
+                स्रोत: {source}
+              </span>
+              {article.nepal_related && (
+                <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-medium">
+                  🇳🇵 Nepal
+                </span>
+              )}
+              <span className="text-xs text-gray-400">
+                {formatNPT(article.translated_at || article.published_at)}
               </span>
             </div>
 
-            {/* Source Attribution */}
-            <div className="bg-blue-50 border-l-4 border-nepal-blue p-4 mb-6 rounded nepali-text">
-              <p className="text-sm text-gray-700">
-                <strong>स्रोत:</strong> {article.sources?.name || 'Unknown'} |{' '}
-                {article.sources?.website_url && (
-                  <a 
-                    href={article.original_url || article.sources.website_url} 
-                    target="_blank" 
-                    rel="noopener noreferrer"
-                    className="text-nepal-blue hover:underline inline-flex items-center gap-1"
-                  >
-                    मूल समाचार पढ्नुहोस् ↗
-                  </a>
-                )}
-              </p>
-            </div>
-
-            {/* Featured Image */}
-            {article.image_url && (
-              <div className="mb-6 rounded-lg overflow-hidden">
-                <img
-                  src={article.image_url}
-                  alt={article.nepali_title || article.original_title}
-                  className="w-full h-auto"
-                />
+            {/* Summary */}
+            {summary && (
+              <div className="bg-gray-50 border-l-4 border-nepal-blue rounded-r-lg p-4 mb-6">
+                <p className="text-gray-700 leading-relaxed nepali-text font-medium">
+                  {summary}
+                </p>
               </div>
             )}
 
-            {/* Article Content */}
-            <div className="prose prose-lg max-w-none nepali-text">
-              {article.nepali_content ? (
-                article.nepali_content.split('\n\n').map((paragraph: string, index: number) => (
-                  <p key={index} className="mb-4 text-gray-700 leading-relaxed text-lg">
+            {/* Content */}
+            {content && (
+              <div className="prose prose-lg max-w-none nepali-text text-gray-800 leading-relaxed mb-8">
+                {content.split('\n\n').map((paragraph: string, index: number) => (
+                  <p key={index} className="mb-4">
                     {paragraph}
                   </p>
-                ))
-              ) : article.nepali_summary ? (
-                <p className="mb-4 text-gray-700 leading-relaxed text-lg">
-                  {article.nepali_summary}
-                </p>
-              ) : article.original_content ? (
-                article.original_content.split('\n\n').map((paragraph: string, index: number) => (
-                  <p key={index} className="mb-4 text-gray-700 leading-relaxed text-lg">
-                    {paragraph}
-                  </p>
-                ))
-              ) : (
-                <p className="text-gray-500 italic">No content available</p>
-              )}
-            </div>
+                ))}
+              </div>
+            )}
 
-            {/* Back Button */}
-            <div className="mt-8 pt-6 border-t border-gray-200">
-              <Link
-                href="/"
-                className="inline-flex items-center gap-2 text-nepal-blue hover:underline nepali-text"
-              >
-                ← गृहपृष्ठमा फर्कनुहोस्
-              </Link>
-            </div>
-          </article>
+            {/* Actions */}
+            <ArticleActions
+              originalUrl={article.original_url}
+              title={title}
+              summary={summary}
+            />
+
+          </div>
+        </article>
+
+        {/* Attribution */}
+        <div className="mt-6 text-center text-xs text-gray-400 nepali-text">
+          यो समाचार {source} बाट अनुवाद गरिएको हो। GN Nepal मौलिक समाचार संस्था होइन।
         </div>
+
       </main>
 
       <Footer />
-    </div>
+    </div >
   )
 }
