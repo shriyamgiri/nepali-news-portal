@@ -5,6 +5,38 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 
 export const dynamic = 'force-dynamic'
+
+export async function generateMetadata({ params }: { params: { id: string } }) {
+  const article = await getArticleById(params.id)
+
+  if (!article) {
+    return { title: 'Article Not Found | GN Nepal' }
+  }
+
+  const title       = article.nepali_title || article.original_title
+  const description = article.nepali_summary || article.original_summary || ''
+  const image       = article.image_url || 'https://nepali-news-portal-wheat.vercel.app/og-image.jpg'
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      images:   [{ url: image, width: 1200, height: 630 }],
+      type:     'article',
+      locale:   'ne_NP',
+      siteName: 'GN Nepal',
+    },
+    twitter: {
+      card:        'summary_large_image',
+      title,
+      description,
+      images:      [image],
+    },
+  }
+}
+
 export default async function NewsArticle({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
 

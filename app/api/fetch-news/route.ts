@@ -4,7 +4,16 @@ import { NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
-const parser = new Parser({ timeout: 10000 })
+const parser = new Parser({
+  timeout: 10000,
+  customFields: {
+    item: [
+      ['media:content', 'mediaContent'],
+      ['media:thumbnail', 'mediaThumbnail'],
+      ['media:group', 'mediaGroup'],
+    ]
+  }
+})
 
 export async function POST() {
   try {
@@ -20,7 +29,6 @@ export async function POST() {
       config[item.config_key] = item.config_value
     })
 
-    // Config values (with fallbacks)
     const NEPAL_BONUS = parseInt(config.nepal_keyword_bonus || '40')
     const MIN_SCORE = parseInt(config.min_score_to_save || '3')
     const TOP_N = parseInt(config.batch_size || '10')
@@ -74,7 +82,6 @@ export async function POST() {
     // ══════════════════════════════════════════
     console.log('\n📦 Phase 1: Re-scoring previous batch backlog...')
 
-    // Get all current fetched articles (previous batch backlog)
     const { data: previousBacklog } = await supabase
       .from('articles')
       .select('id, original_title, original_content, original_summary, priority_score, batch_id, batch_time')
@@ -82,7 +89,7 @@ export async function POST() {
       .not('batch_id', 'is', null)
 
     if (previousBacklog?.length) {
-      console.log(`🔄 Re-scoring ${previousBacklog.length} backlog articles with current trends...`)
+      console.log(`🔄 Re-scoring ${previousBacklog.length} backlog articles...`)
 
       for (const article of previousBacklog) {
         const text = (
@@ -93,18 +100,15 @@ export async function POST() {
 
         let newScore = 0
 
-        // Re-score with current trending keywords
         for (const kw of keywords) {
           if (text.includes(kw.keyword.toLowerCase())) {
             newScore += kw.priority || 5
           }
         }
 
-        // Nepal bonus
         const isNepal = NEPAL_KEYWORDS.some(kw => text.includes(kw))
         if (isNepal) newScore += NEPAL_BONUS
 
-        // Sports boost
         for (const sport of sportKeywords) {
           if (text.includes(sport.keyword)) {
             newScore += sport.boost
@@ -112,27 +116,22 @@ export async function POST() {
           }
         }
 
-        // Source credibility
         newScore += 10 // Base credibility
 
-        // ── Time Decay ──
-        // Older articles get progressively lower scores
         const batchTime = article.batch_time ? new Date(article.batch_time).getTime() : Date.now()
         const ageMinutes = (Date.now() - batchTime) / 60000
-        const decayFactor = Math.max(0.3, 1 - (ageMinutes / 120)) // Minimum 30% of score
+        const decayFactor = Math.max(0.3, 1 - (ageMinutes / 120))
         newScore = Math.round(newScore * decayFactor)
 
-        // Minimum score
         if (newScore < MIN_SCORE) newScore = MIN_SCORE
 
-        // Update score in DB
         await supabase
           .from('articles')
           .update({ priority_score: newScore })
           .eq('id', article.id)
       }
 
-      console.log('✅ Previous batch re-scored with time decay applied')
+      console.log('✅ Previous batch re-scored with time decay')
     } else {
       console.log('ℹ️ No previous batch backlog found')
     }
@@ -165,7 +164,6 @@ export async function POST() {
 
     const allArticles: ScoredArticle[] = []
 
-    // ── Process Each Source ──
     for (const source of sources) {
       try {
         const feedUrl = source.rss_feed_url || await detectRssFeed(source.website_url)
@@ -192,7 +190,7 @@ export async function POST() {
           let score = 0
           const matchedKeywords: string[] = []
 
-          // 1. Trending Keywords Score
+          // 1. Trending Keywords
           for (const kw of keywords) {
             if (text.includes(kw.keyword.toLowerCase())) {
               score += kw.priority || 5
@@ -200,14 +198,14 @@ export async function POST() {
             }
           }
 
-          // 2. Nepal Relevance Score
+          // 2. Nepal Relevance
           const isNepalRelated = NEPAL_KEYWORDS.some(kw => text.includes(kw))
           if (isNepalRelated) {
             score += NEPAL_BONUS
             matchedKeywords.push('🇳🇵 Nepal')
           }
 
-          // 3. Sports Events Score
+          // 3. Sports Events
           for (const sport of sportKeywords) {
             if (text.includes(sport.keyword)) {
               score += sport.boost
@@ -228,12 +226,12 @@ export async function POST() {
             matchedKeywords.push('🔴 Breaking')
           }
 
-          // 5. Source Credibility Score
+          // 5. Source Credibility
           const credibilityBoost = (source.credibility_score || 5) *
             parseInt(config.source_credibility_multiplier || '2')
           score += credibilityBoost
 
-          // 6. Recency Score
+          // 6. Recency
           if (item.pubDate) {
             const ageHrs = (Date.now() - new Date(item.pubDate).getTime()) / 3600000
             if (ageHrs < 0.5) score += parseInt(config.recency_30min_bonus || '10')
@@ -242,11 +240,10 @@ export async function POST() {
             else if (ageHrs < 6) score += parseInt(config.recency_6hr_bonus || '2')
           }
 
-          // 7. Image Bonus
-          const imageUrl = extractImageUrl(item.content || item.description || '')
-          if (imageUrl || item.enclosure?.url) score += 2
+          // 7. Image extraction (enhanced - multiple methods)
+          const imageUrl = extractBestImage(item)
+          if (imageUrl) score += 2
 
-          // Never skip - minimum score
           if (score < MIN_SCORE) score = MIN_SCORE
 
           allArticles.push({
@@ -254,7 +251,7 @@ export async function POST() {
             content: item.content || item.contentSnippet || item.description || '',
             summary: item.contentSnippet || item.description || '',
             url: item.link,
-            imageUrl: imageUrl || item.enclosure?.url || null,
+            imageUrl,
             author: item.creator || item.author || null,
             publishedAt: item.pubDate || item.isoDate || new Date().toISOString(),
             sourceId: source.id,
@@ -268,7 +265,6 @@ export async function POST() {
           })
         }
 
-        // Update last fetched
         await supabase
           .from('sources')
           .update({ last_fetched_at: new Date().toISOString() })
@@ -291,7 +287,7 @@ export async function POST() {
 
     console.log(`📊 ${allArticles.length} total articles scored`)
 
-    // ── Deduplicate by title ──
+    // ── Deduplicate ──
     const deduplicated = deduplicateByTitle(allArticles)
 
     // ── Filter already stored ──
@@ -304,12 +300,12 @@ export async function POST() {
     const existingUrls = new Set(existing?.map((e: any) => e.original_url) || [])
     const newArticles = deduplicated.filter(a => !existingUrls.has(a.url))
 
-    // ── Save TOP N new articles with current batch_id ──
+    // ── Save TOP N ──
     const topArticles = newArticles
       .sort((a, b) => b.score - a.score)
       .slice(0, TOP_N)
 
-    console.log(`⭐ Saving top ${topArticles.length} new articles with batch_id: ${currentBatchId}`)
+    console.log(`⭐ Saving top ${topArticles.length} articles (batch: ${currentBatchId})`)
 
     let savedCount = 0
 
@@ -324,6 +320,10 @@ export async function POST() {
         ? new Date(Date.now() + 90 * 60 * 1000).toISOString()
         : null
 
+      // Use placeholder only as last resort
+      const finalImageUrl = article.imageUrl ||
+        'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
+
       const { error } = await supabase.from('articles').insert({
         source_id: article.sourceId,
         category_id: category?.id || null,
@@ -332,8 +332,7 @@ export async function POST() {
         original_summary: article.summary,
         original_language: article.language,
         original_url: article.url,
-        image_url: article.imageUrl ||
-          'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800',
+        image_url: finalImageUrl,
         author: article.author,
         published_at: article.publishedAt,
         status: 'fetched',
@@ -341,8 +340,8 @@ export async function POST() {
         is_breaking: article.isBreaking,
         breaking_expires_at: breakingExpiresAt,
         nepal_related: article.nepalRelated,
-        batch_id: currentBatchId,   // ← Batch tracking
-        batch_time: currentBatchTime, // ← Batch tracking
+        batch_id: currentBatchId,
+        batch_time: currentBatchTime,
         view_count: 0,
         like_count: 0,
         comment_count: 0,
@@ -350,13 +349,13 @@ export async function POST() {
 
       if (!error) {
         savedCount++
-        console.log(`  ✅ [${article.score}pts] ${article.title.substring(0, 50)}`)
+        const imgStatus = article.imageUrl ? '🖼️' : '📄'
+        console.log(`  ✅ ${imgStatus} [${article.score}pts] ${article.title.substring(0, 50)}`)
       } else {
         console.error('Insert error:', error.message)
       }
     }
 
-    // ── Log fetch results ──
     await supabase.from('fetch_logs').insert({
       status: 'success',
       articles_found: allArticles.length,
@@ -387,6 +386,51 @@ export async function POST() {
 }
 
 // ── Helper Functions ──
+
+function extractBestImage(item: any): string | null {
+  // 1. media:content (most common in news RSS)
+  const mediaContent = item.mediaContent || item['media:content']
+  if (mediaContent) {
+    const url = mediaContent?.$?.url || mediaContent?.url || mediaContent
+    if (typeof url === 'string' && isValidImageUrl(url)) return url
+  }
+
+  // 2. media:thumbnail
+  const mediaThumbnail = item.mediaThumbnail || item['media:thumbnail']
+  if (mediaThumbnail) {
+    const url = mediaThumbnail?.$?.url || mediaThumbnail?.url || mediaThumbnail
+    if (typeof url === 'string' && isValidImageUrl(url)) return url
+  }
+
+  // 3. enclosure (image type)
+  if (item.enclosure?.url) {
+    const url = item.enclosure.url
+    if (isValidImageUrl(url) && url.match(/\.(jpg|jpeg|png|webp|gif)/i)) return url
+  }
+
+  // 4. Extract <img> from content HTML
+  const contentHtml = item.content || item['content:encoded'] || ''
+  if (contentHtml) {
+    const match = contentHtml.match(/<img[^>]+src=["']([^"']+)["']/i)
+    if (match?.[1] && isValidImageUrl(match[1])) return match[1]
+  }
+
+  // 5. Extract <img> from description
+  const descHtml = item.description || item.summary || ''
+  if (descHtml) {
+    const match = descHtml.match(/<img[^>]+src=["']([^"']+)["']/i)
+    if (match?.[1] && isValidImageUrl(match[1])) return match[1]
+  }
+
+  return null
+}
+
+function isValidImageUrl(url: string): boolean {
+  if (!url || typeof url !== 'string') return false
+  if (url.startsWith('data:')) return false
+  if (url.length < 10) return false
+  return url.startsWith('http') || url.startsWith('//')
+}
 
 function deduplicateByTitle(articles: any[]): any[] {
   const sorted = [...articles].sort((a, b) => b.score - a.score)
@@ -436,8 +480,4 @@ async function detectRssFeed(url: string): Promise<string | null> {
     }
   }
   return null
-}
-
-function extractImageUrl(content: string): string | null {
-  return content.match(/<img[^>]+src="([^">]+)"/i)?.[1] || null
 }
