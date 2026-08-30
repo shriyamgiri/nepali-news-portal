@@ -2,7 +2,7 @@
 """
 GN Nepal - AI Reel Generator (GitHub Actions version)
 Uses Pexels/Pixabay video + Nepali voiceover + text overlay
-Editorial v2: broadcast pace, fade transitions, balanced text
+Editorial v3: broadcast pace, fade transitions, balanced text, fixed filter conflict
 """
 
 import os
@@ -16,9 +16,10 @@ from pathlib import Path
 from datetime import datetime
 
 # ── Config ───────────────────────────────────────────────────
-VIDEO_WIDTH  = 1080
-VIDEO_HEIGHT = 1920
-FPS          = 30
+# Output resolution - defined ONCE, used everywhere (no separate -vf scale)
+OUT_WIDTH  = 720
+OUT_HEIGHT = 1280
+FPS        = 30
 
 COLOR_RED    = "0xDC143C"
 COLOR_WHITE  = "white"
@@ -304,19 +305,20 @@ def wrap_for_ffmpeg(text: str, max_chars: int = 26) -> str:
 # ════════════════════════════════════════════════════════════
 
 def build_video(script: dict, bg_video_path: Path, voiceover_path: Path) -> Path:
-    """Combine background video + text overlays + voiceover using FFmpeg"""
+    """Combine background video + text overlays + voiceover using FFmpeg.
+    IMPORTANT: All scaling happens INSIDE filter_complex only.
+    Never combine -vf with -filter_complex on the same stream (causes
+    'Simple and complex filtering cannot be used together' error).
+    """
     print("🎬 Building final video with FFmpeg...")
 
     output_path = OUTPUT_DIR / f"reel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
 
     audio_duration = get_audio_duration(voiceover_path)
-    # Tightened minimum - broadcast pace means shorter overall runtime
     total_duration = max(audio_duration + 1.5, 22)
 
-    # Timing windows (broadcast pace - snappier cuts)
     intro_end    = min(2.0, total_duration * 0.1)
     headline_end = min(intro_end + 6.0, total_duration * 0.45)
-    bullets_end  = total_duration
 
     font_path = 'scripts/assets/NotoSansDevanagari-Bold.ttf'
 
@@ -327,16 +329,11 @@ def build_video(script: dict, bg_video_path: Path, voiceover_path: Path) -> Path
 
     fade_out_start = max(total_duration - 0.5, 0)
 
-    # Filter chain:
-    # 1. Scale/crop bg video to 1080x1920, loop, add fade in/out for real animation
-    # 2. Header bar (always visible)
-    # 3. Headline block (0 -> headline_end) with fade-friendly enable window
-    # 4. Bullets block (headline_end -> end), each bullet vertically balanced
-    # 5. Bottom branding bar
-
+    # All dimensions scaled proportionally for 720x1280 output
+    # (previous version was built for 1080x1920, now divided by 1.5)
     filter_complex = f"""
-[0:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,
-crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},
+[0:v]scale={OUT_WIDTH}:{OUT_HEIGHT}:force_original_aspect_ratio=increase,
+crop={OUT_WIDTH}:{OUT_HEIGHT},
 setsar=1,
 loop=loop=-1:size=9999:start=0,
 trim=duration={total_duration},
@@ -344,27 +341,28 @@ fps={FPS},
 fade=t=in:st=0:d=0.4,
 fade=t=out:st={fade_out_start}:d=0.5[bg];
 
-[bg]drawbox=x=0:y=0:w={VIDEO_WIDTH}:h=130:color={COLOR_RED}@0.92:t=fill[hdr];
+[bg]drawbox=x=0:y=0:w={OUT_WIDTH}:h=87:color={COLOR_RED}@0.92:t=fill[hdr];
 
-[hdr]drawtext=fontfile={font_path}:text='GN Nepal':fontcolor=white:fontsize=52:x=40:y=36[title];
+[hdr]drawtext=fontfile={font_path}:text='GN Nepal':fontcolor=white:fontsize=35:x=27:y=24[title];
 
-[title]drawbox=x=0:y=(h-420):w={VIDEO_WIDTH}:h=420:color=black@0.62:t=fill:enable='lt(t\\,{headline_end})'[boxed];
+[title]drawbox=x=0:y=(h-280):w={OUT_WIDTH}:h=280:color=black@0.62:t=fill:enable='lt(t\\,{headline_end})'[boxed];
 
-[boxed]drawtext=fontfile={font_path}:text='{headline}':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=(h-380)+((380-text_h)/2):line_spacing=18:enable='lt(t\\,{headline_end})'[headline_txt];
+[boxed]drawtext=fontfile={font_path}:text='{headline}':fontcolor=white:fontsize=33:x=(w-text_w)/2:y=(h-253)+((253-text_h)/2):line_spacing=12:enable='lt(t\\,{headline_end})'[headline_txt];
 
-[headline_txt]drawbox=x=0:y=(h-400):w={VIDEO_WIDTH}:h=400:color=black@0.68:t=fill:enable='gte(t\\,{headline_end})'[boxed2];
+[headline_txt]drawbox=x=0:y=(h-266):w={OUT_WIDTH}:h=266:color=black@0.68:t=fill:enable='gte(t\\,{headline_end})'[boxed2];
 
-[boxed2]drawtext=fontfile={font_path}:text='{bullet1}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-360):line_spacing=10:enable='gte(t\\,{headline_end})'[b1];
+[boxed2]drawtext=fontfile={font_path}:text='{bullet1}':fontcolor=white:fontsize=27:x=(w-text_w)/2:y=(h-240):line_spacing=7:enable='gte(t\\,{headline_end})'[b1];
 
-[b1]drawtext=fontfile={font_path}:text='{bullet2}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-260):line_spacing=10:enable='gte(t\\,{headline_end})'[b2];
+[b1]drawtext=fontfile={font_path}:text='{bullet2}':fontcolor=white:fontsize=27:x=(w-text_w)/2:y=(h-173):line_spacing=7:enable='gte(t\\,{headline_end})'[b2];
 
-[b2]drawtext=fontfile={font_path}:text='{bullet3}':fontcolor={COLOR_YELLOW}:fontsize=40:x=(w-text_w)/2:y=(h-160):line_spacing=10:enable='gte(t\\,{headline_end})'[b3];
+[b2]drawtext=fontfile={font_path}:text='{bullet3}':fontcolor={COLOR_YELLOW}:fontsize=27:x=(w-text_w)/2:y=(h-106):line_spacing=7:enable='gte(t\\,{headline_end})'[b3];
 
-[b3]drawbox=x=0:y=(h-70):w={VIDEO_WIDTH}:h=70:color={COLOR_RED}@0.95:t=fill[footer];
+[b3]drawbox=x=0:y=(h-47):w={OUT_WIDTH}:h=47:color={COLOR_RED}@0.95:t=fill[footer];
 
-[footer]drawtext=fontfile={font_path}:text='gnnepal.com':fontcolor=white:fontsize=36:x=(w-text_w)/2:y=(h-53)[vout]
+[footer]drawtext=fontfile={font_path}:text='gnnepal.com':fontcolor=white:fontsize=24:x=(w-text_w)/2:y=(h-35)[vout]
 """.replace('\n', '').replace('  ', '')
 
+    # NOTE: No -vf here! Only -filter_complex, mapped explicitly via [vout]
     cmd = [
         'ffmpeg', '-y',
         '-i', str(bg_video_path),
@@ -377,7 +375,6 @@ fade=t=out:st={fade_out_start}:d=0.5[bg];
         '-crf', '28',
         '-maxrate', '2M',
         '-bufsize', '4M',
-        '-vf', 'scale=720:1280',
         '-c:a', 'aac',
         '-b:a', '96k',
         '-shortest',
@@ -385,7 +382,7 @@ fade=t=out:st={fade_out_start}:d=0.5[bg];
         str(output_path)
     ]
 
-    print(f"Running FFmpeg... (total duration ~{total_duration:.1f}s)")
+    print(f"Running FFmpeg... (total duration ~{total_duration:.1f}s, output {OUT_WIDTH}x{OUT_HEIGHT})")
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
@@ -402,7 +399,7 @@ fade=t=out:st={fade_out_start}:d=0.5[bg];
 
 def main():
     print("="*60)
-    print("🎬 GN Nepal - AI Reel Generator (Editorial v2)")
+    print("🎬 GN Nepal - AI Reel Generator (Editorial v3)")
     print("="*60)
 
     if not ARTICLE_ID:
@@ -415,34 +412,27 @@ def main():
     try:
         update_reel_status(REEL_ID, 'generating')
 
-        # 1. Get article
         print("\n📰 Fetching article...")
         article = get_article(ARTICLE_ID)
         print(f"✅ {article.get('nepali_title', '')[:60]}")
 
-        # 2. Generate script
         print("\n✍️  Generating script...")
         script = generate_script(article)
 
-        # 3. Get background video
         print("\n🎥 Getting background video...")
         bg_video = get_background_video(script.get('video_keyword', script.get('category', 'news')))
 
-        # 4. Generate voiceover (broadcast pace)
         print("\n🎙️  Generating voiceover...")
         voiceover = generate_voiceover(script['voiceover'])
 
-        # 5. Build final video
         print("\n🎬 Assembling final video...")
         final_video = build_video(script, bg_video, voiceover)
 
-        # 6. Upload to Supabase Storage
         print("\n☁️  Uploading to storage...")
         storage_path = f"{ARTICLE_ID}/{final_video.name}"
         video_url    = upload_to_storage(final_video, storage_path)
         print(f"✅ Uploaded: {video_url}")
 
-        # 7. Update reel record
         file_size_mb = final_video.stat().st_size / 1024 / 1024
         update_reel_status(
             REEL_ID, 'completed',
