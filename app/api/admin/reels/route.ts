@@ -3,10 +3,6 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
 
-const GITHUB_TOKEN      = process.env.GITHUB_TOKEN || ''
-const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || ''
-const GITHUB_REPO_NAME  = process.env.GITHUB_REPO_NAME || ''
-
 // POST - Trigger reel generation
 export async function POST(request: Request) {
   try {
@@ -16,6 +12,17 @@ export async function POST(request: Request) {
     if (!article_id) {
       return NextResponse.json({ error: 'article_id required' }, { status: 400 })
     }
+
+    // ── Read env vars INSIDE the function (not at module load time) ──
+    const GITHUB_TOKEN = process.env.GITHUB_TOKEN || ''
+    const GITHUB_REPO_OWNER = process.env.GITHUB_REPO_OWNER || ''
+    const GITHUB_REPO_NAME = process.env.GITHUB_REPO_NAME || ''
+
+    console.log('🔍 DEBUG - Token exists:', !!GITHUB_TOKEN)
+    console.log('🔍 DEBUG - Token length:', GITHUB_TOKEN.length)
+    console.log('🔍 DEBUG - Token first 8 chars:', GITHUB_TOKEN.substring(0, 8))
+    console.log('🔍 DEBUG - Owner:', JSON.stringify(GITHUB_REPO_OWNER))
+    console.log('🔍 DEBUG - Repo:', JSON.stringify(GITHUB_REPO_NAME))
 
     // Create reel record
     const { data: reel, error: reelError } = await supabase
@@ -32,12 +39,15 @@ export async function POST(request: Request) {
     // Trigger GitHub Actions workflow
     const githubUrl = `https://api.github.com/repos/${GITHUB_REPO_OWNER}/${GITHUB_REPO_NAME}/actions/workflows/generate-reel.yml/dispatches`
 
+    console.log('🔍 DEBUG - Full URL:', githubUrl)
+
     const githubResponse = await fetch(githubUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${GITHUB_TOKEN}`,
         'Accept': 'application/vnd.github+json',
         'Content-Type': 'application/json',
+        'X-GitHub-Api-Version': '2022-11-28',
       },
       body: JSON.stringify({
         ref: 'main',
@@ -48,8 +58,12 @@ export async function POST(request: Request) {
       }),
     })
 
+    console.log('🔍 DEBUG - GitHub response status:', githubResponse.status)
+
     if (!githubResponse.ok) {
       const errorText = await githubResponse.text()
+      console.log('🔍 DEBUG - GitHub error body:', errorText)
+
       await supabase
         .from('reels')
         .update({ status: 'failed', error_message: `GitHub trigger failed: ${errorText}` })
