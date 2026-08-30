@@ -60,8 +60,11 @@ export async function searchPexelsPhoto(query: string): Promise<StockImage | nul
   if (!PEXELS_API_KEY) return null
 
   try {
+    // Random page 1-3 for variety
+    const randomPage = Math.floor(Math.random() * 3) + 1
+
     const response = await fetch(
-      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=5&orientation=landscape`,
+      `https://api.pexels.com/v1/search?query=${encodeURIComponent(query)}&per_page=10&page=${randomPage}&orientation=landscape`,
       {
         headers: { Authorization: PEXELS_API_KEY },
         signal: AbortSignal.timeout(5000),
@@ -71,7 +74,12 @@ export async function searchPexelsPhoto(query: string): Promise<StockImage | nul
     if (!response.ok) return null
 
     const data = await response.json()
-    const photo = data.photos?.[0]
+    const photos = data.photos || []
+
+    if (!photos.length) return null
+
+    // Pick random photo from results for variety
+    const photo = photos[Math.floor(Math.random() * photos.length)]
 
     if (!photo) return null
 
