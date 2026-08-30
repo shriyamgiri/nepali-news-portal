@@ -2,6 +2,7 @@
 """
 GN Nepal - AI Reel Generator (GitHub Actions version)
 Uses Pexels/Pixabay video + Nepali voiceover + text overlay
+Editorial v2: broadcast pace, fade transitions, balanced text
 """
 
 import os
@@ -51,7 +52,7 @@ def supabase_headers():
 
 def get_article(article_id: str) -> dict:
     url = f"{SUPABASE_URL}/rest/v1/articles?id=eq.{article_id}&select=*,sources(name),categories(slug)"
-    r   = requests.get(url, headers=supabase_headers(), timeout=10)
+    r    = requests.get(url, headers=supabase_headers(), timeout=10)
     data = r.json()
     if not data:
         raise Exception(f"Article {article_id} not found")
@@ -100,19 +101,20 @@ def generate_script(article: dict) -> dict:
         category = 'world'
 
     prompt = f"""तपाईं GN Nepal को AI समाचार प्रस्तोता हुनुहुन्छ।
-यो समाचारको लागि ४५-सेकेन्डको रिल भिडियो स्क्रिप्ट बनाउनुहोस्।
+यो समाचारको लागि छोटो, छिटो-गतिको ब्रेकिङ न्युज रिल स्क्रिप्ट बनाउनुहोस् (कुल ३०-३५ सेकेन्ड बोलिने)।
 
 शीर्षक: {title}
 सारांश: {summary}
 
 नियमहरू:
-1. प्राकृतिक, जीवन्त नेपाली भाषा
-2. रोमाञ्चक ब्रेकिङ न्युज शैली
-3. ३ छोटो प्रभावशाली बुँदाहरू (प्रत्येक १० शब्दभन्दा कम)
-4. भिडियो सर्च का लागि अंग्रेजीमा २-३ शब्दको कीवर्ड पनि दिनुहोस्
+1. छोटो र सीधा वाक्यहरू (वास्तविक न्युज एंकरले बोले जस्तो छिटो)
+2. रोमाञ्चक ब्रेकिङ न्युज शैली, हरेक शब्द अर्थपूर्ण होस्
+3. ३ छोटो प्रभावशाली बुँदाहरू (प्रत्येक ८ शब्दभन्दा कम)
+4. भ्वाइसओभर कुल ३०-३५ सेकेन्डमा पूरा हुने लामो नहोस् (लगभग ७०-८० शब्द)
+5. भिडियो सर्च का लागि अंग्रेजीमा २-३ शब्दको कीवर्ड पनि दिनुहोस्
 
 JSON मात्र फर्काउनुहोस् (no markdown):
-{{"headline":"छोटो शीर्षक (१२ शब्दभन्दा कम)","bullet1":"पहिलो बुँदा","bullet2":"दोस्रो बुँदा","bullet3":"तेस्रो बुँदा","voiceover":"पूरा ४५-सेकेन्ड भ्वाइसओभर नेपालीमा","video_keyword":"english search keyword for stock video eg flood disaster","hashtags":"#GNNepal #नेपालसमाचार"}}"""
+{{"headline":"छोटो शीर्षक (१० शब्दभन्दा कम)","bullet1":"पहिलो बुँदा","bullet2":"दोस्रो बुँदा","bullet3":"तेस्रो बुँदा","voiceover":"छोटो ३०-३५ सेकेन्ड भ्वाइसओभर नेपालीमा","video_keyword":"english search keyword for stock video eg flood disaster","hashtags":"#GNNepal #नेपालसमाचार"}}"""
 
     url     = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
@@ -131,10 +133,10 @@ JSON मात्र फर्काउनुहोस् (no markdown):
         print(f"⚠️ Script generation failed: {e}")
         return {
             "headline":      title[:60],
-            "bullet1":       summary[:60] if summary else "",
+            "bullet1":       summary[:50] if summary else "",
             "bullet2":       f"स्रोत: {source}",
             "bullet3":       "gnnepal.com मा थप पढ्नुहोस्",
-            "voiceover":     f"{title}. {summary}. थप जानकारीका लागि gnnepal.com हेर्नुहोस्!",
+            "voiceover":     f"{title}. थप जानकारीका लागि gnnepal.com हेर्नुहोस्!",
             "video_keyword": category,
             "hashtags":      "#GNNepal #नेपालसमाचार",
             "source":        source,
@@ -161,7 +163,6 @@ def search_pexels_video(query: str) -> str:
             return None
         video = videos[0]
         files = video.get('video_files', [])
-        # Prefer HD portrait
         portrait_files = [f for f in files if f.get('height', 0) > f.get('width', 0)]
         best = portrait_files[0] if portrait_files else files[0]
         return best['link']
@@ -214,7 +215,6 @@ def get_background_video(keyword: str) -> Path:
         provider  = 'pixabay'
 
     if not video_url:
-        # Fallback generic keyword
         video_url = search_pexels_video('nepal news')
         provider  = 'pexels-fallback'
 
@@ -230,14 +230,30 @@ def get_background_video(keyword: str) -> Path:
 
 
 # ════════════════════════════════════════════════════════════
-# VOICEOVER
+# VOICEOVER (broadcast-paced)
 # ════════════════════════════════════════════════════════════
 
 def generate_voiceover(text: str) -> Path:
-    path = WORK_DIR / 'voiceover.mp3'
-    tts  = gTTS(text=text, lang='ne', slow=False)
-    tts.save(str(path))
-    print(f"✅ Voiceover generated")
+    """Generate Nepali voiceover, then speed up to broadcast news pace"""
+    raw_path = WORK_DIR / 'voiceover_raw.mp3'
+    path     = WORK_DIR / 'voiceover.mp3'
+
+    tts = gTTS(text=text, lang='ne', slow=False)
+    tts.save(str(raw_path))
+
+    # Speed up 1.18x for punchy broadcast pace (pitch preserved via atempo)
+    result = subprocess.run([
+        'ffmpeg', '-y',
+        '-i', str(raw_path),
+        '-filter:a', 'atempo=1.18',
+        str(path)
+    ], capture_output=True, text=True)
+
+    if result.returncode != 0 or not path.exists():
+        print(f"⚠️ Speed-up failed, using raw voiceover: {result.stderr[-300:]}")
+        return raw_path
+
+    print(f"✅ Voiceover generated (broadcast pace 1.18x)")
     return path
 
 
@@ -252,7 +268,7 @@ def get_audio_duration(path: Path) -> float:
 
 
 # ════════════════════════════════════════════════════════════
-# FFMPEG VIDEO ASSEMBLY
+# TEXT HELPERS
 # ════════════════════════════════════════════════════════════
 
 def escape_ffmpeg_text(text: str) -> str:
@@ -264,6 +280,29 @@ def escape_ffmpeg_text(text: str) -> str:
     return text
 
 
+def wrap_for_ffmpeg(text: str, max_chars: int = 26) -> str:
+    """Wrap long text into multiple lines joined by literal newline for drawtext"""
+    words   = text.split(' ')
+    lines   = []
+    current = ''
+    for word in words:
+        test = (current + ' ' + word).strip()
+        if len(test) <= max_chars:
+            current = test
+        else:
+            if current:
+                lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
+    joined = '\n'.join(lines[:2])  # max 2 lines for balance
+    return escape_ffmpeg_text(joined)
+
+
+# ════════════════════════════════════════════════════════════
+# FFMPEG VIDEO ASSEMBLY
+# ════════════════════════════════════════════════════════════
+
 def build_video(script: dict, bg_video_path: Path, voiceover_path: Path) -> Path:
     """Combine background video + text overlays + voiceover using FFmpeg"""
     print("🎬 Building final video with FFmpeg...")
@@ -271,22 +310,29 @@ def build_video(script: dict, bg_video_path: Path, voiceover_path: Path) -> Path
     output_path = OUTPUT_DIR / f"reel_{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
 
     audio_duration = get_audio_duration(voiceover_path)
-    total_duration = max(audio_duration + 2, 30)  # min 30 sec
+    # Tightened minimum - broadcast pace means shorter overall runtime
+    total_duration = max(audio_duration + 1.5, 22)
+
+    # Timing windows (broadcast pace - snappier cuts)
+    intro_end    = min(2.0, total_duration * 0.1)
+    headline_end = min(intro_end + 6.0, total_duration * 0.45)
+    bullets_end  = total_duration
 
     font_path = 'scripts/assets/NotoSansDevanagari-Bold.ttf'
 
-    headline = escape_ffmpeg_text(script.get('headline', ''))
-    bullet1  = escape_ffmpeg_text(script.get('bullet1', ''))
-    bullet2  = escape_ffmpeg_text(script.get('bullet2', ''))
-    bullet3  = escape_ffmpeg_text(script.get('bullet3', ''))
+    headline = wrap_for_ffmpeg(script.get('headline', ''), 22)
+    bullet1  = wrap_for_ffmpeg(script.get('bullet1', ''), 26)
+    bullet2  = wrap_for_ffmpeg(script.get('bullet2', ''), 26)
+    bullet3  = wrap_for_ffmpeg(script.get('bullet3', ''), 26)
 
-    # Build FFmpeg filter complex:
-    # 1. Scale/crop background video to 1080x1920, loop if needed
-    # 2. Add dark overlay for text readability
-    # 3. Add GN Nepal header bar
-    # 4. Add headline text (appears 0-15s)
-    # 5. Add bullet points (appear staggered)
-    # 6. Add bottom branding bar
+    fade_out_start = max(total_duration - 0.5, 0)
+
+    # Filter chain:
+    # 1. Scale/crop bg video to 1080x1920, loop, add fade in/out for real animation
+    # 2. Header bar (always visible)
+    # 3. Headline block (0 -> headline_end) with fade-friendly enable window
+    # 4. Bullets block (headline_end -> end), each bullet vertically balanced
+    # 5. Bottom branding bar
 
     filter_complex = f"""
 [0:v]scale={VIDEO_WIDTH}:{VIDEO_HEIGHT}:force_original_aspect_ratio=increase,
@@ -294,27 +340,29 @@ crop={VIDEO_WIDTH}:{VIDEO_HEIGHT},
 setsar=1,
 loop=loop=-1:size=9999:start=0,
 trim=duration={total_duration},
-fps={FPS}[bg];
+fps={FPS},
+fade=t=in:st=0:d=0.4,
+fade=t=out:st={fade_out_start}:d=0.5[bg];
 
-[bg]drawbox=x=0:y=0:w={VIDEO_WIDTH}:h=140:color={COLOR_RED}@0.9:t=fill[hdr];
+[bg]drawbox=x=0:y=0:w={VIDEO_WIDTH}:h=130:color={COLOR_RED}@0.92:t=fill[hdr];
 
-[hdr]drawtext=fontfile={font_path}:text='GN Nepal':fontcolor=white:fontsize=55:x=40:y=40:enable='between(t\\,0\\,{total_duration})'[title];
+[hdr]drawtext=fontfile={font_path}:text='GN Nepal':fontcolor=white:fontsize=52:x=40:y=36[title];
 
-[title]drawbox=x=0:y=(h-400):w={VIDEO_WIDTH}:h=400:color=black@0.6:t=fill:enable='between(t\\,0\\,15)'[boxed];
+[title]drawbox=x=0:y=(h-420):w={VIDEO_WIDTH}:h=420:color=black@0.62:t=fill:enable='lt(t\\,{headline_end})'[boxed];
 
-[boxed]drawtext=fontfile={font_path}:text='{headline}':fontcolor=white:fontsize=48:x=(w-text_w)/2:y=(h-320):line_spacing=15:enable='between(t\\,0\\,15)'[headline_txt];
+[boxed]drawtext=fontfile={font_path}:text='{headline}':fontcolor=white:fontsize=50:x=(w-text_w)/2:y=(h-380)+((380-text_h)/2):line_spacing=18:enable='lt(t\\,{headline_end})'[headline_txt];
 
-[headline_txt]drawbox=x=0:y=(h-380):w={VIDEO_WIDTH}:h=380:color=black@0.65:t=fill:enable='between(t\\,15\\,{total_duration})'[boxed2];
+[headline_txt]drawbox=x=0:y=(h-400):w={VIDEO_WIDTH}:h=400:color=black@0.68:t=fill:enable='gte(t\\,{headline_end})'[boxed2];
 
-[boxed2]drawtext=fontfile={font_path}:text='{bullet1}':fontcolor=white:fontsize=42:x=60:y=(h-330):enable='between(t\\,15\\,{total_duration})'[b1];
+[boxed2]drawtext=fontfile={font_path}:text='{bullet1}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-360):line_spacing=10:enable='gte(t\\,{headline_end})'[b1];
 
-[b1]drawtext=fontfile={font_path}:text='{bullet2}':fontcolor=white:fontsize=42:x=60:y=(h-250):enable='between(t\\,15\\,{total_duration})'[b2];
+[b1]drawtext=fontfile={font_path}:text='{bullet2}':fontcolor=white:fontsize=40:x=(w-text_w)/2:y=(h-260):line_spacing=10:enable='gte(t\\,{headline_end})'[b2];
 
-[b2]drawtext=fontfile={font_path}:text='{bullet3}':fontcolor=yellow:fontsize=42:x=60:y=(h-170):enable='between(t\\,15\\,{total_duration})'[b3];
+[b2]drawtext=fontfile={font_path}:text='{bullet3}':fontcolor={COLOR_YELLOW}:fontsize=40:x=(w-text_w)/2:y=(h-160):line_spacing=10:enable='gte(t\\,{headline_end})'[b3];
 
 [b3]drawbox=x=0:y=(h-70):w={VIDEO_WIDTH}:h=70:color={COLOR_RED}@0.95:t=fill[footer];
 
-[footer]drawtext=fontfile={font_path}:text='gnnepal.com':fontcolor=white:fontsize=38:x=(w-text_w)/2:y=(h-55)[vout]
+[footer]drawtext=fontfile={font_path}:text='gnnepal.com':fontcolor=white:fontsize=36:x=(w-text_w)/2:y=(h-53)[vout]
 """.replace('\n', '').replace('  ', '')
 
     cmd = [
@@ -325,16 +373,19 @@ fps={FPS}[bg];
         '-map', '[vout]',
         '-map', '1:a',
         '-c:v', 'libx264',
-        '-preset', 'fast',
-        '-crf', '23',
+        '-preset', 'medium',
+        '-crf', '28',
+        '-maxrate', '2M',
+        '-bufsize', '4M',
+        '-vf', 'scale=720:1280',
         '-c:a', 'aac',
-        '-b:a', '128k',
+        '-b:a', '96k',
         '-shortest',
         '-t', str(total_duration),
         str(output_path)
     ]
 
-    print("Running FFmpeg...")
+    print(f"Running FFmpeg... (total duration ~{total_duration:.1f}s)")
     result = subprocess.run(cmd, capture_output=True, text=True)
 
     if result.returncode != 0:
@@ -351,7 +402,7 @@ fps={FPS}[bg];
 
 def main():
     print("="*60)
-    print("🎬 GN Nepal - AI Reel Generator")
+    print("🎬 GN Nepal - AI Reel Generator (Editorial v2)")
     print("="*60)
 
     if not ARTICLE_ID:
@@ -377,7 +428,7 @@ def main():
         print("\n🎥 Getting background video...")
         bg_video = get_background_video(script.get('video_keyword', script.get('category', 'news')))
 
-        # 4. Generate voiceover
+        # 4. Generate voiceover (broadcast pace)
         print("\n🎙️  Generating voiceover...")
         voiceover = generate_voiceover(script['voiceover'])
 
@@ -413,7 +464,6 @@ def main():
         sys.exit(1)
 
     finally:
-        # Cleanup
         shutil.rmtree(str(WORK_DIR), ignore_errors=True)
 
 
