@@ -1,0 +1,60 @@
+name: GN Nepal - Generate Reel
+
+on:
+  workflow_dispatch:
+    inputs:
+      article_id:
+        description: 'Article ID to generate reel for'
+        required: true
+        type: string
+      reel_id:
+        description: 'Reel record ID to update'
+        required: true
+        type: string
+
+jobs:
+  generate-reel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verify FFmpeg (pre-installed on ubuntu-latest)
+        run: ffmpeg -version
+
+      - name: Install Python dependencies
+        run: |
+          pip install -r scripts/requirements.txt
+
+      - name: Download Nepali font
+        run: |
+          mkdir -p scripts/assets
+          curl -L -o scripts/assets/NotoSansDevanagari-Bold.ttf \
+            https://github.com/googlefonts/noto-fonts/raw/main/hinted/ttf/NotoSansDevanagari/NotoSansDevanagari-Bold.ttf
+
+      - name: Generate Reel Video
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          PEXELS_API_KEY: ${{ secrets.PEXELS_API_KEY }}
+          PIXABAY_API_KEY: ${{ secrets.PIXABAY_API_KEY }}
+          ARTICLE_ID: ${{ inputs.article_id }}
+          REEL_ID: ${{ inputs.reel_id }}
+        run: |
+          python scripts/generate_reel.py
+
+      - name: Upload video as artifact (backup)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reel-video
+          path: reel_output/*.mp4
+          retention-days: 7
