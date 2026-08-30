@@ -3,6 +3,7 @@ export const dynamic = 'force-dynamic'
 import { NextResponse } from 'next/server'
 import Parser from 'rss-parser'
 import { supabaseAdmin as supabase } from '@/app/lib/supabase'
+import { getStockImage } from '@/app/lib/stockMedia'
 
 const parser = new Parser({
   timeout: 10000,
@@ -319,9 +320,23 @@ export async function POST() {
         : null
 
       // Upgrade image URL where safe to do so
-      const finalImageUrl = article.imageUrl
+      let finalImageUrl = article.imageUrl
         ? upgradeImageUrl(article.imageUrl)
-        : 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
+        : null
+
+      // If no real image found from RSS, try stock media (Pexels/Pixabay)
+      if (!finalImageUrl) {
+        console.log(`  🔍 Searching stock media for: ${article.title.substring(0, 40)}`)
+        const stockImage = await getStockImage(article.title, article.category)
+
+        if (stockImage) {
+          finalImageUrl = stockImage.url
+          console.log(`  ✅ Stock image found (${stockImage.provider}): ${stockImage.sourceId}`)
+        } else {
+          finalImageUrl = 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?w=800'
+          console.log(`  ⚠️ No stock image found, using placeholder`)
+        }
+      }
 
       const { error } = await supabase.from('articles').insert({
         source_id: article.sourceId,
