@@ -13,6 +13,22 @@ interface Topic {
   source:     string
   priority:   number
   is_active:  boolean
+  created_at: string
+}
+
+function formatNPT(dateStr: string): string {
+  const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z'
+  const date = new Date(utcStr)
+  const nepalTime = new Date(date.getTime() + (5 * 60 + 45) * 60 * 1000)
+  const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
+  const day    = nepalTime.getUTCDate().toString().padStart(2, '0')
+  const month  = months[nepalTime.getUTCMonth()]
+  const year   = nepalTime.getUTCFullYear()
+  const hours  = nepalTime.getUTCHours()
+  const mins   = nepalTime.getUTCMinutes().toString().padStart(2, '0')
+  const ampm   = hours >= 12 ? 'PM' : 'AM'
+  const h12    = (hours % 12 || 12).toString().padStart(2, '0')
+  return `${day}-${month}-${year}, ${h12}:${mins} ${ampm} NPT`
 }
 
 const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
@@ -91,9 +107,12 @@ export default function TrendingTopicsPage() {
     fetchTopics()
   }
 
-  const manualTopics = topics.filter(t => t.source === 'manual')
-  const autoTopics   = topics.filter(t => t.source === 'auto')
-  const activeCount  = topics.filter(t => t.is_active).length
+  const manualTopics    = topics.filter(t => t.source === 'manual')
+  const autoTopics      = topics.filter(t => t.source === 'auto')
+  const activeCount     = topics.filter(t => t.is_active).length
+  const autoLastUpdated = autoTopics.length > 0
+    ? autoTopics.reduce((latest, t) => t.created_at > latest ? t.created_at : latest, autoTopics[0].created_at)
+    : null
 
   return (
     <div className="space-y-6">
@@ -221,6 +240,11 @@ export default function TrendingTopicsPage() {
           <div className="px-5 py-4 border-b border-gray-100">
             <h2 className="font-bold text-gray-900">🤖 Auto-Detected Topics ({autoTopics.length})</h2>
             <p className="text-xs text-gray-400 mt-0.5">Detected when 3+ sources cover the same topic — updated each fetch cycle</p>
+            {autoLastUpdated && (
+              <p className="text-xs text-gray-400 mt-1">
+                Last updated: <span className="text-gray-600 font-medium">{formatNPT(autoLastUpdated)}</span>
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap gap-2 p-5">
             {autoTopics.map(t => (
