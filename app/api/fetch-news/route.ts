@@ -54,8 +54,20 @@ export async function POST() {
       .eq('is_active', true)
       .order('priority', { ascending: false })
 
-    const keywords = trendingTopics || []
-    console.log(`📡 ${sources.length} sources | 🔥 ${keywords.length} trending keywords`)
+    const rawKeywords = trendingTopics || []
+
+    // Deduplicate: if same keyword exists in both manual + auto, keep highest priority only
+    const keywordMap = new Map<string, { keyword: string; priority: number; source: string }>()
+    for (const kw of rawKeywords) {
+      const key = kw.keyword.toLowerCase()
+      const existing = keywordMap.get(key)
+      if (!existing || kw.priority > existing.priority) {
+        keywordMap.set(key, kw)
+      }
+    }
+    const keywords = Array.from(keywordMap.values())
+
+    console.log(`📡 ${sources.length} sources | 🔥 ${keywords.length} trending keywords (${rawKeywords.length - keywords.length} duplicates removed)`)
 
     const { data: sportsEvents } = await supabase
       .from('sports_events')
