@@ -11,6 +11,35 @@ jobs:
     timeout-minutes: 10
 
     steps:
+      # ── Step 0: Detect Trending Topics (keeps scoring fresh) ──
+      - name: 🔥 Step 0 - Detect Trending Topics
+        run: |
+          echo "🔥 Detecting trending topics..."
+          
+          RESPONSE=$(curl -s -w "\nHTTP_STATUS:%{http_code}" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            "${{ secrets.SITE_URL }}/api/trending/auto")
+          
+          HTTP_STATUS=$(echo "$RESPONSE" | grep "HTTP_STATUS" | cut -d':' -f2)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+          
+          echo "Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+          
+          if [ "$HTTP_STATUS" != "200" ]; then
+            echo "⚠️ Trending detection returned $HTTP_STATUS (continuing anyway)"
+          else
+            echo "✅ Trending topics refreshed"
+          fi
+
+      # ── Delay between trending and fetch ──
+      - name: ⏳ Delay 3 seconds
+        run: |
+          echo "Waiting for trending topics to save..."
+          sleep 3
+
       # ── Step 1: Fetch new articles + Re-score previous batch ──
       - name: 📰 Step 1 - Fetch & Score
         run: |
@@ -94,6 +123,7 @@ jobs:
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ GN Nepal pipeline complete!"
+          echo "🔥 Trending topics refreshed"
           echo "📰 Fresh Nepali news published"
           echo "🧹 Old batch cleaned up"
           echo "⏰ Time: $(date)"
