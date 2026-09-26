@@ -167,6 +167,27 @@ async function translateWithFallback(title: string, summary: string, content: st
   }
 }
 
+// ── Nepali vocabulary glossary ──
+// Add to this list every time a bad/non-standard word choice is spotted in
+// published articles. This is the fastest way to permanently fix recurring
+// mistranslations without waiting for a model update.
+const NEPALI_GLOSSARY = `
+शब्दावली (यी शब्दहरू सधैं यसरी नै लेख्नुहोस्, अरू रूपमा होइन):
+- international → अन्तर्राष्ट्रिय (राष्ट्रसंघीय, अन्तर्देशीय, वा अन्य कुनै रूप प्रयोग नगर्नुहोस्)
+- United Nations → संयुक्त राष्ट्रसंघ
+- government → सरकार
+- minister → मन्त्री
+- prime minister → प्रधानमन्त्री
+- president → राष्ट्रपति
+- parliament → संसद
+- election → निर्वाचन
+- economy → अर्थतन्त्र
+- earthquake → भूकम्प
+- flood → बाढी
+- police → प्रहरी
+- army → सेना
+`.trim()
+
 async function callModel(
   modelName: string,
   title: string,
@@ -177,13 +198,16 @@ async function callModel(
   const model = genAI.getGenerativeModel({ model: modelName })
   const source = summary || content.substring(0, 300)
 
-  const prompt = `You are a professional Nepali news journalist. Translate this article to formal Nepali.
+  const prompt = `You are a professional Nepali news journalist working for a Nepal-based news outlet. Translate this article into formal, standard NEPALI (not Hindi, not a mix of Hindi-Nepali).
 
-RULES:
-1. Keep proper nouns AS-IS: Trump, Modi, Nepal, BBC, UN, Delhi, Kathmandu
-2. Formal journalistic Nepali (पत्रकारिता शैली)
-3. Do NOT add or change any facts
-4. Expand short content to 3 paragraphs using available facts
+CRITICAL LANGUAGE RULES:
+1. Write in pure, standard NEPALI as used by Nepali newspapers (Kantipur, Nagarik, Setopati style) — NOT Hindi. Do not use Hindi vocabulary, Hindi spellings, or Hindi-style sentence construction, even if the words look similar.
+2. Use commonly understood, everyday Nepali journalism vocabulary. Avoid obscure, overly literal, archaic, or Sanskrit-heavy word choices when a simpler, standard word is used in real Nepali news reporting.
+3. Follow this glossary EXACTLY for these recurring terms — do not substitute alternate translations:
+${NEPALI_GLOSSARY}
+4. Keep all proper nouns (person names, place names, organization names) transliterated consistently into Nepali script — e.g. Trump → ट्रम्प, Biden → बाइडेन. Never literally translate a person's name, and never change the spelling between different articles.
+5. Do NOT add or change any facts, numbers, dates, or quotes from the original.
+6. Expand short content to 3 paragraphs using only the facts available — do not invent new information.
 
 Title: ${title}
 Content: ${source.substring(0, 500)}
