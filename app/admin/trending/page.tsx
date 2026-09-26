@@ -17,8 +17,10 @@ interface Topic {
 }
 
 function formatNPT(dateStr: string): string {
-  const utcStr = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z'
+  const normalized = dateStr.replace(' ', 'T')
+  const utcStr = /Z|[+-]\d{2}:?\d{2}$/.test(normalized) ? normalized : normalized + 'Z'
   const date = new Date(utcStr)
+  if (isNaN(date.getTime())) return '—'
   const nepalTime = new Date(date.getTime() + (5 * 60 + 45) * 60 * 1000)
   const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
   const day    = nepalTime.getUTCDate().toString().padStart(2, '0')
