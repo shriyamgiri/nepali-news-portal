@@ -21,8 +21,8 @@ export async function getArticles(limit = 20) {
     `)
     .eq('status', 'published')
     .not('nepali_title', 'is', null)
+    .order('translated_at', { ascending: false, nullsFirst: false })
     .order('priority_score', { ascending: false })
-    .order('published_at', { ascending: false })
     .limit(limit)
 
   console.log('✅ Articles found:', data?.length || 0)
